@@ -1,0 +1,413 @@
+"use client"
+
+import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
+import { supabase, type Piso, type Area, type Usuario, type TipoEquipo, type EstadoEquipo } from "@/lib/supabase"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Select } from "@/components/ui/select"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+
+export default function RegistroPage() {
+  const router = useRouter()
+  const [loading, setLoading] = useState(false)
+  const [pisos, setPisos] = useState<Piso[]>([])
+  const [areas, setAreas] = useState<Area[]>([])
+  const [usuarios, setUsuarios] = useState<Usuario[]>([])
+  const [filteredAreas, setFilteredAreas] = useState<Area[]>([])
+  const [filteredUsuarios, setFilteredUsuarios] = useState<Usuario[]>([])
+
+  const [formData, setFormData] = useState({
+    piso_id: "",
+    area_id: "",
+    usuario_id: "",
+    tipo: "computadora" as TipoEquipo,
+    codigo_barra: "",
+    marca: "",
+    modelo: "",
+    ram: "",
+    almacenamiento: "",
+    procesador: "",
+    pulgadas: "",
+    estado: "activo" as EstadoEquipo,
+    observaciones: "",
+    perifericos: {
+      mouse: 0,
+      teclado: 0,
+      parlantes: 0,
+      otros: ""
+    }
+  })
+
+  useEffect(() => {
+    cargarDatos()
+  }, [])
+
+  useEffect(() => {
+    if (formData.piso_id) {
+      const areasDelPiso = areas.filter(a => a.piso_id === formData.piso_id)
+      setFilteredAreas(areasDelPiso)
+      setFormData(prev => ({ ...prev, area_id: "", usuario_id: "" }))
+    }
+  }, [formData.piso_id, areas])
+
+  useEffect(() => {
+    if (formData.area_id) {
+      const usuariosDelArea = usuarios.filter(u => u.area_id === formData.area_id)
+      setFilteredUsuarios(usuariosDelArea)
+      setFormData(prev => ({ ...prev, usuario_id: "" }))
+    }
+  }, [formData.area_id, usuarios])
+
+  async function cargarDatos() {
+    const [pisosRes, areasRes, usuariosRes] = await Promise.all([
+      supabase.from('pisos').select('*').order('orden', { ascending: false }),
+      supabase.from('areas').select('*').order('nombre'),
+      supabase.from('usuarios').select('*').eq('activo', true).order('nombre')
+    ])
+
+    if (pisosRes.data) setPisos(pisosRes.data)
+    if (areasRes.data) setAreas(areasRes.data)
+    if (usuariosRes.data) setUsuarios(usuariosRes.data)
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setLoading(true)
+
+    try {
+      const specs: Record<string, any> = {}
+
+      if (formData.tipo === 'computadora') {
+        if (formData.procesador) specs.procesador = formData.procesador
+        if (formData.ram) specs.ram = formData.ram
+        if (formData.almacenamiento) specs.almacenamiento = formData.almacenamiento
+      } else if (formData.tipo === 'monitor') {
+        if (formData.pulgadas) specs.pulgadas = formData.pulgadas
+      }
+
+      const { data: equipo, error: equipoError } = await supabase
+        .from('equipos')
+        .insert({
+          tipo: formData.tipo,
+          usuario_id: formData.usuario_id || null,
+          codigo_barra: formData.codigo_barra || null,
+          marca: formData.marca || null,
+          modelo: formData.modelo || null,
+          specs,
+          estado: formData.estado,
+          observaciones: formData.observaciones || null
+        })
+        .select()
+        .single()
+
+      if (equipoError) throw equipoError
+
+      if (formData.tipo === 'computadora' && equipo) {
+        const perifericos = []
+        if (formData.perifericos.mouse > 0) {
+          perifericos.push({
+            equipo_id: equipo.id,
+            tipo: 'mouse',
+            cantidad: formData.perifericos.mouse
+          })
+        }
+        if (formData.perifericos.teclado > 0) {
+          perifericos.push({
+            equipo_id: equipo.id,
+            tipo: 'teclado',
+            cantidad: formData.perifericos.teclado
+          })
+        }
+        if (formData.perifericos.parlantes > 0) {
+          perifericos.push({
+            equipo_id: equipo.id,
+            tipo: 'parlantes',
+            cantidad: formData.perifericos.parlantes
+          })
+        }
+        if (formData.perifericos.otros) {
+          perifericos.push({
+            equipo_id: equipo.id,
+            tipo: 'otros',
+            cantidad: 1,
+            descripcion: formData.perifericos.otros
+          })
+        }
+
+        if (perifericos.length > 0) {
+          const { error: perifericosError } = await supabase
+            .from('perifericos')
+            .insert(perifericos)
+
+          if (perifericosError) throw perifericosError
+        }
+      }
+
+      alert('Equipo registrado exitosamente')
+      router.push('/dashboard')
+    } catch (error) {
+      console.error('Error:', error)
+      alert('Error al registrar el equipo')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-primary-50 to-gold-50 py-8">
+      <div className="container mx-auto px-4">
+        <Card className="max-w-3xl mx-auto">
+          <CardHeader>
+            <CardTitle className="text-primary-600">Registrar Equipo</CardTitle>
+            <CardDescription>Complete el formulario para añadir un nuevo equipo al inventario</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div className="grid md:grid-cols-3 gap-4">
+                <div>
+                  <Label htmlFor="piso">Piso *</Label>
+                  <Select
+                    id="piso"
+                    required
+                    value={formData.piso_id}
+                    onChange={(e) => setFormData({ ...formData, piso_id: e.target.value })}
+                  >
+                    <option value="">Seleccione...</option>
+                    {pisos.map(piso => (
+                      <option key={piso.id} value={piso.id}>{piso.nombre}</option>
+                    ))}
+                  </Select>
+                </div>
+
+                <div>
+                  <Label htmlFor="area">Área *</Label>
+                  <Select
+                    id="area"
+                    required
+                    value={formData.area_id}
+                    onChange={(e) => setFormData({ ...formData, area_id: e.target.value })}
+                    disabled={!formData.piso_id}
+                  >
+                    <option value="">Seleccione...</option>
+                    {filteredAreas.map(area => (
+                      <option key={area.id} value={area.id}>{area.nombre}</option>
+                    ))}
+                  </Select>
+                </div>
+
+                <div>
+                  <Label htmlFor="usuario">Usuario</Label>
+                  <Select
+                    id="usuario"
+                    value={formData.usuario_id}
+                    onChange={(e) => setFormData({ ...formData, usuario_id: e.target.value })}
+                    disabled={!formData.area_id}
+                  >
+                    <option value="">Sin asignar</option>
+                    {filteredUsuarios.map(usuario => (
+                      <option key={usuario.id} value={usuario.id}>{usuario.nombre}</option>
+                    ))}
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid md:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="tipo">Tipo de Equipo *</Label>
+                  <Select
+                    id="tipo"
+                    required
+                    value={formData.tipo}
+                    onChange={(e) => setFormData({ ...formData, tipo: e.target.value as TipoEquipo })}
+                  >
+                    <option value="computadora">Computadora</option>
+                    <option value="monitor">Monitor</option>
+                    <option value="impresora">Impresora</option>
+                    <option value="scanner">Scanner</option>
+                    <option value="anexo">Anexo</option>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label htmlFor="codigo">Código de Barra</Label>
+                  <Input
+                    id="codigo"
+                    value={formData.codigo_barra}
+                    onChange={(e) => setFormData({ ...formData, codigo_barra: e.target.value })}
+                    placeholder="Ej: XEADSSDEF774"
+                  />
+                </div>
+              </div>
+
+              <div className="grid md:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="marca">Marca</Label>
+                  <Input
+                    id="marca"
+                    value={formData.marca}
+                    onChange={(e) => setFormData({ ...formData, marca: e.target.value })}
+                    placeholder="Ej: HP, Dell, Samsung"
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="modelo">Modelo</Label>
+                  <Input
+                    id="modelo"
+                    value={formData.modelo}
+                    onChange={(e) => setFormData({ ...formData, modelo: e.target.value })}
+                    placeholder="Ej: I5 1214, ProBook 450"
+                  />
+                </div>
+              </div>
+
+              {formData.tipo === 'computadora' && (
+                <div className="grid md:grid-cols-3 gap-4 p-4 bg-primary-50 rounded-lg">
+                  <div>
+                    <Label htmlFor="procesador">Procesador</Label>
+                    <Input
+                      id="procesador"
+                      value={formData.procesador}
+                      onChange={(e) => setFormData({ ...formData, procesador: e.target.value })}
+                      placeholder="Ej: I5 1214"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="ram">RAM</Label>
+                    <Input
+                      id="ram"
+                      value={formData.ram}
+                      onChange={(e) => setFormData({ ...formData, ram: e.target.value })}
+                      placeholder="Ej: 16GB"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="almacenamiento">Almacenamiento</Label>
+                    <Input
+                      id="almacenamiento"
+                      value={formData.almacenamiento}
+                      onChange={(e) => setFormData({ ...formData, almacenamiento: e.target.value })}
+                      placeholder="Ej: 512SSD"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {formData.tipo === 'monitor' && (
+                <div className="p-4 bg-primary-50 rounded-lg">
+                  <Label htmlFor="pulgadas">Pulgadas</Label>
+                  <Input
+                    id="pulgadas"
+                    value={formData.pulgadas}
+                    onChange={(e) => setFormData({ ...formData, pulgadas: e.target.value })}
+                    placeholder="Ej: 24, 27"
+                  />
+                </div>
+              )}
+
+              {formData.tipo === 'computadora' && (
+                <div className="p-4 bg-gold-50 rounded-lg">
+                  <h3 className="font-semibold mb-3 text-gold-800">Periféricos</h3>
+                  <div className="grid md:grid-cols-3 gap-4">
+                    <div>
+                      <Label htmlFor="mouse">Mouse</Label>
+                      <Input
+                        id="mouse"
+                        type="number"
+                        min="0"
+                        value={formData.perifericos.mouse}
+                        onChange={(e) => setFormData({
+                          ...formData,
+                          perifericos: { ...formData.perifericos, mouse: parseInt(e.target.value) || 0 }
+                        })}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="teclado">Teclado</Label>
+                      <Input
+                        id="teclado"
+                        type="number"
+                        min="0"
+                        value={formData.perifericos.teclado}
+                        onChange={(e) => setFormData({
+                          ...formData,
+                          perifericos: { ...formData.perifericos, teclado: parseInt(e.target.value) || 0 }
+                        })}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="parlantes">Parlantes</Label>
+                      <Input
+                        id="parlantes"
+                        type="number"
+                        min="0"
+                        value={formData.perifericos.parlantes}
+                        onChange={(e) => setFormData({
+                          ...formData,
+                          perifericos: { ...formData.perifericos, parlantes: parseInt(e.target.value) || 0 }
+                        })}
+                      />
+                    </div>
+                  </div>
+                  <div className="mt-3">
+                    <Label htmlFor="otros">Otros periféricos</Label>
+                    <Input
+                      id="otros"
+                      value={formData.perifericos.otros}
+                      onChange={(e) => setFormData({
+                        ...formData,
+                        perifericos: { ...formData.perifericos, otros: e.target.value }
+                      })}
+                      placeholder="Ej: Webcam, Micrófono"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="grid md:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="estado">Estado</Label>
+                  <Select
+                    id="estado"
+                    value={formData.estado}
+                    onChange={(e) => setFormData({ ...formData, estado: e.target.value as EstadoEquipo })}
+                  >
+                    <option value="activo">Activo</option>
+                    <option value="disponible">Disponible</option>
+                    <option value="mantenimiento">Mantenimiento</option>
+                    <option value="baja">Baja</option>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label htmlFor="observaciones">Observaciones</Label>
+                  <Input
+                    id="observaciones"
+                    value={formData.observaciones}
+                    onChange={(e) => setFormData({ ...formData, observaciones: e.target.value })}
+                    placeholder="Notas adicionales"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-3 justify-end pt-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => router.push('/dashboard')}
+                >
+                  Cancelar
+                </Button>
+                <Button type="submit" disabled={loading}>
+                  {loading ? 'Guardando...' : 'Registrar Equipo'}
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  )
+}
