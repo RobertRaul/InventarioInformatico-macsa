@@ -26,7 +26,6 @@ export type Usuario = {
   id: string
   area_id: string
   nombre: string
-  cargo: string | null
   activo: boolean
   created_at: string
   updated_at: string

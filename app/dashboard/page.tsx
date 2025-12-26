@@ -42,6 +42,10 @@ export default function DashboardPage() {
   const [filterTipo, setFilterTipo] = useState("")
   const [filterEstado, setFilterEstado] = useState("")
   const [filterPiso, setFilterPiso] = useState("")
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage, setItemsPerPage] = useState(20)
+  const [sortField, setSortField] = useState<string>("created_at")
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc")
 
   useEffect(() => {
     cargarEquipos()
@@ -81,6 +85,21 @@ export default function DashboardPage() {
     }
   }
 
+  async function handleDelete(id: string) {
+    if (!confirm('¿Estás seguro de eliminar este equipo? Esta acción no se puede deshacer.')) return
+
+    try {
+      const { error } = await supabase.from('equipos').delete().eq('id', id)
+      if (error) throw error
+
+      alert('Equipo eliminado exitosamente')
+      cargarEquipos()
+    } catch (error) {
+      console.error('Error:', error)
+      alert('Error al eliminar el equipo')
+    }
+  }
+
   const equiposFiltrados = equipos.filter(equipo => {
     const matchSearch = !searchTerm ||
       equipo.codigo_barra?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -95,7 +114,65 @@ export default function DashboardPage() {
     return matchSearch && matchTipo && matchEstado && matchPiso
   })
 
+  const equiposOrdenados = [...equiposFiltrados].sort((a, b) => {
+    let aValue: any
+    let bValue: any
+
+    switch (sortField) {
+      case "tipo":
+        aValue = a.tipo
+        bValue = b.tipo
+        break
+      case "marca":
+        aValue = a.marca || ""
+        bValue = b.marca || ""
+        break
+      case "estado":
+        aValue = a.estado
+        bValue = b.estado
+        break
+      case "usuario":
+        aValue = a.usuario?.nombre || ""
+        bValue = b.usuario?.nombre || ""
+        break
+      case "piso":
+        aValue = a.usuario?.area?.piso?.nombre || ""
+        bValue = b.usuario?.area?.piso?.nombre || ""
+        break
+      case "area":
+        aValue = a.usuario?.area?.nombre || ""
+        bValue = b.usuario?.area?.nombre || ""
+        break
+      default:
+        aValue = a.created_at
+        bValue = b.created_at
+    }
+
+    if (aValue < bValue) return sortDirection === "asc" ? -1 : 1
+    if (aValue > bValue) return sortDirection === "asc" ? 1 : -1
+    return 0
+  })
+
+  const totalPages = Math.ceil(equiposOrdenados.length / itemsPerPage)
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const endIndex = startIndex + itemsPerPage
+  const equiposPaginados = equiposOrdenados.slice(startIndex, endIndex)
+
   const pisosUnicos = Array.from(new Set(equipos.map(e => e.usuario?.area?.piso?.nombre).filter(Boolean))) as string[]
+
+  function handleSort(field: string) {
+    if (sortField === field) {
+      setSortDirection(sortDirection === "asc" ? "desc" : "asc")
+    } else {
+      setSortField(field)
+      setSortDirection("asc")
+    }
+  }
+
+  function handlePageChange(page: number) {
+    setCurrentPage(page)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
 
   function formatSpecs(specs: any, tipo: string): string {
     if (!specs || Object.keys(specs).length === 0) return '-'
@@ -230,25 +307,37 @@ export default function DashboardPage() {
                 </Select>
               </div>
             </div>
-            {(searchTerm || filterTipo || filterEstado || filterPiso) && (
-              <div className="mt-3 flex justify-between items-center">
-                <p className="text-sm text-gray-600">
-                  Mostrando {equiposFiltrados.length} de {equipos.length} equipos
-                </p>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setSearchTerm("")
-                    setFilterTipo("")
-                    setFilterEstado("")
-                    setFilterPiso("")
-                  }}
-                >
-                  Limpiar filtros
-                </Button>
+            <div className="mt-3 flex justify-between items-center">
+              <p className="text-sm text-gray-600">
+                Mostrando {startIndex + 1}-{Math.min(endIndex, equiposOrdenados.length)} de {equiposOrdenados.length} equipos
+                {equiposFiltrados.length !== equipos.length && ` (filtrados de ${equipos.length} totales)`}
+              </p>
+              <div className="flex gap-3 items-center">
+                <Select value={itemsPerPage.toString()} onChange={(e) => {
+                  setItemsPerPage(Number(e.target.value))
+                  setCurrentPage(1)
+                }}>
+                  <option value="10">10 por página</option>
+                  <option value="20">20 por página</option>
+                  <option value="50">50 por página</option>
+                  <option value="100">100 por página</option>
+                </Select>
+                {(searchTerm || filterTipo || filterEstado || filterPiso) && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setSearchTerm("")
+                      setFilterTipo("")
+                      setFilterEstado("")
+                      setFilterPiso("")
+                    }}
+                  >
+                    Limpiar filtros
+                  </Button>
+                )}
               </div>
-            )}
+            </div>
           </CardContent>
         </Card>
 
@@ -275,18 +364,49 @@ export default function DashboardPage() {
               <table className="w-full">
                 <thead className="bg-primary-600 text-white">
                   <tr>
-                    <th className="px-4 py-3 text-left text-sm font-semibold">Piso</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold">Área</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold">Tipo</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold">Detalles</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold cursor-pointer hover:bg-primary-700" onClick={() => handleSort("piso")}>
+                      <div className="flex items-center gap-1">
+                        Piso
+                        {sortField === "piso" && <span>{sortDirection === "asc" ? "↑" : "↓"}</span>}
+                      </div>
+                    </th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold cursor-pointer hover:bg-primary-700" onClick={() => handleSort("area")}>
+                      <div className="flex items-center gap-1">
+                        Área
+                        {sortField === "area" && <span>{sortDirection === "asc" ? "↑" : "↓"}</span>}
+                      </div>
+                    </th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold cursor-pointer hover:bg-primary-700" onClick={() => handleSort("tipo")}>
+                      <div className="flex items-center gap-1">
+                        Tipo
+                        {sortField === "tipo" && <span>{sortDirection === "asc" ? "↑" : "↓"}</span>}
+                      </div>
+                    </th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold cursor-pointer hover:bg-primary-700" onClick={() => handleSort("marca")}>
+                      <div className="flex items-center gap-1">
+                        Detalles
+                        {sortField === "marca" && <span>{sortDirection === "asc" ? "↑" : "↓"}</span>}
+                      </div>
+                    </th>
                     <th className="px-4 py-3 text-left text-sm font-semibold">Periféricos</th>
                     <th className="px-4 py-3 text-left text-sm font-semibold">Código</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold">Usuario</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold">Estado</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold cursor-pointer hover:bg-primary-700" onClick={() => handleSort("usuario")}>
+                      <div className="flex items-center gap-1">
+                        Usuario
+                        {sortField === "usuario" && <span>{sortDirection === "asc" ? "↑" : "↓"}</span>}
+                      </div>
+                    </th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold cursor-pointer hover:bg-primary-700" onClick={() => handleSort("estado")}>
+                      <div className="flex items-center gap-1">
+                        Estado
+                        {sortField === "estado" && <span>{sortDirection === "asc" ? "↑" : "↓"}</span>}
+                      </div>
+                    </th>
+                    <th className="px-4 py-3 text-center text-sm font-semibold">Acciones</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
-                  {equiposFiltrados.map((equipo, index) => (
+                  {equiposPaginados.map((equipo, index) => (
                     <tr
                       key={equipo.id}
                       className={`hover:bg-gray-50 transition-colors ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}
@@ -330,11 +450,85 @@ export default function DashboardPage() {
                           {equipo.estado}
                         </span>
                       </td>
+                      <td className="px-4 py-3 text-sm">
+                        <div className="flex justify-center gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => router.push(`/equipos/${equipo.id}`)}
+                          >
+                            Editar
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => handleDelete(equipo.id)}
+                          >
+                            Eliminar
+                          </Button>
+                        </div>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
+            {totalPages > 1 && (
+              <div className="px-4 py-4 border-t bg-gray-50 flex items-center justify-between">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePageChange(currentPage - 1)}
+                  disabled={currentPage === 1}
+                >
+                  Anterior
+                </Button>
+                <div className="flex gap-2 items-center">
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    let pageNum
+                    if (totalPages <= 5) {
+                      pageNum = i + 1
+                    } else if (currentPage <= 3) {
+                      pageNum = i + 1
+                    } else if (currentPage >= totalPages - 2) {
+                      pageNum = totalPages - 4 + i
+                    } else {
+                      pageNum = currentPage - 2 + i
+                    }
+                    return (
+                      <Button
+                        key={pageNum}
+                        variant={currentPage === pageNum ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => handlePageChange(pageNum)}
+                      >
+                        {pageNum}
+                      </Button>
+                    )
+                  })}
+                  {totalPages > 5 && currentPage < totalPages - 2 && (
+                    <>
+                      <span className="text-gray-500">...</span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handlePageChange(totalPages)}
+                      >
+                        {totalPages}
+                      </Button>
+                    </>
+                  )}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePageChange(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                >
+                  Siguiente
+                </Button>
+              </div>
+            )}
           </div>
         )}
       </div>

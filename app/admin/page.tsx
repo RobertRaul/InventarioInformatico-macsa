@@ -63,8 +63,12 @@ function PisosAdmin() {
   const [pisos, setPisos] = useState<Piso[]>([])
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [bulkDialogOpen, setBulkDialogOpen] = useState(false)
   const [editingPiso, setEditingPiso] = useState<Piso | null>(null)
   const [formData, setFormData] = useState({ nombre: "", orden: 0 })
+  const [bulkFormData, setBulkFormData] = useState({ nombres: "" })
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage] = useState(10)
 
   useEffect(() => {
     cargarPisos()
@@ -100,6 +104,38 @@ function PisosAdmin() {
     cargarPisos()
   }
 
+  async function handleBulkSubmit(e: React.FormEvent) {
+    e.preventDefault()
+
+    const lineas = bulkFormData.nombres
+      .split('\n')
+      .map(l => l.trim())
+      .filter(l => l.length > 0)
+
+    if (lineas.length === 0) {
+      alert('Por favor ingresa al menos un piso')
+      return
+    }
+
+    const pisosToInsert = lineas.map((linea, index) => {
+      const partes = linea.split(',').map(p => p.trim())
+      const nombre = partes[0]
+      const orden = partes[1] ? parseInt(partes[1]) : (index + 1)
+      return { nombre, orden }
+    })
+
+    const { error } = await supabase.from('pisos').insert(pisosToInsert)
+
+    if (error) {
+      alert('Error al crear pisos: ' + error.message)
+    } else {
+      alert(`Se crearon ${lineas.length} pisos exitosamente`)
+      setBulkDialogOpen(false)
+      setBulkFormData({ nombres: "" })
+      cargarPisos()
+    }
+  }
+
   async function handleDelete(id: string) {
     if (!confirm('¿Estás seguro de eliminar este piso? Se eliminarán todas sus áreas asociadas.')) return
 
@@ -125,37 +161,65 @@ function PisosAdmin() {
           <CardTitle>Gestión de Pisos</CardTitle>
           <CardDescription>Administra los pisos del edificio</CardDescription>
         </div>
-        <Button onClick={() => openDialog()}>Nuevo Piso</Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setBulkDialogOpen(true)}>Registro Múltiple</Button>
+          <Button onClick={() => openDialog()}>Nuevo Piso</Button>
+        </div>
       </CardHeader>
       <CardContent>
         {loading ? (
           <p className="text-center py-8 text-gray-500">Cargando...</p>
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Nombre</TableHead>
-                <TableHead>Orden</TableHead>
-                <TableHead className="text-right">Acciones</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {pisos.map((piso) => (
-                <TableRow key={piso.id}>
-                  <TableCell className="font-medium">{piso.nombre}</TableCell>
-                  <TableCell>{piso.orden}</TableCell>
-                  <TableCell className="text-right space-x-2">
-                    <Button variant="outline" size="sm" onClick={() => openDialog(piso)}>
-                      Editar
-                    </Button>
-                    <Button variant="destructive" size="sm" onClick={() => handleDelete(piso.id)}>
-                      Eliminar
-                    </Button>
-                  </TableCell>
+          <>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Nombre</TableHead>
+                  <TableHead>Orden</TableHead>
+                  <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {pisos.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((piso) => (
+                  <TableRow key={piso.id}>
+                    <TableCell className="font-medium">{piso.nombre}</TableCell>
+                    <TableCell>{piso.orden}</TableCell>
+                    <TableCell className="text-right space-x-2">
+                      <Button variant="outline" size="sm" onClick={() => openDialog(piso)}>
+                        Editar
+                      </Button>
+                      <Button variant="destructive" size="sm" onClick={() => handleDelete(piso.id)}>
+                        Eliminar
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+            {pisos.length > itemsPerPage && (
+              <div className="flex justify-center gap-2 mt-4">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                >
+                  Anterior
+                </Button>
+                <span className="flex items-center px-3 text-sm">
+                  Página {currentPage} de {Math.ceil(pisos.length / itemsPerPage)}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(p => Math.min(Math.ceil(pisos.length / itemsPerPage), p + 1))}
+                  disabled={currentPage === Math.ceil(pisos.length / itemsPerPage)}
+                >
+                  Siguiente
+                </Button>
+              </div>
+            )}
+          </>
         )}
       </CardContent>
 
@@ -199,6 +263,40 @@ function PisosAdmin() {
           </form>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={bulkDialogOpen} onOpenChange={setBulkDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Registro Múltiple de Pisos</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleBulkSubmit}>
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="bulk-nombres-pisos">Pisos (uno por línea)</Label>
+                <textarea
+                  id="bulk-nombres-pisos"
+                  className="w-full min-h-[200px] p-2 border rounded-md"
+                  value={bulkFormData.nombres}
+                  onChange={(e) => setBulkFormData({ ...bulkFormData, nombres: e.target.value })}
+                  placeholder="1er Piso, 1&#10;2do Piso, 2&#10;3er Piso, 3&#10;4to Piso, 4"
+                  required
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Formato: Nombre, Orden (uno por línea). Si no especificas orden, se asignará automáticamente.
+                </p>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setBulkDialogOpen(false)}>
+                Cancelar
+              </Button>
+              <Button type="submit">
+                Crear Pisos
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </Card>
   )
 }
@@ -208,8 +306,12 @@ function AreasAdmin() {
   const [pisos, setPisos] = useState<Piso[]>([])
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [bulkDialogOpen, setBulkDialogOpen] = useState(false)
   const [editingArea, setEditingArea] = useState<Area | null>(null)
   const [formData, setFormData] = useState({ nombre: "", piso_id: "" })
+  const [bulkFormData, setBulkFormData] = useState({ nombres: "", piso_id: "" })
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage] = useState(10)
 
   useEffect(() => {
     cargarDatos()
@@ -246,6 +348,36 @@ function AreasAdmin() {
     cargarDatos()
   }
 
+  async function handleBulkSubmit(e: React.FormEvent) {
+    e.preventDefault()
+
+    const nombres = bulkFormData.nombres
+      .split('\n')
+      .map(n => n.trim())
+      .filter(n => n.length > 0)
+
+    if (nombres.length === 0) {
+      alert('Por favor ingresa al menos un nombre de área')
+      return
+    }
+
+    const areasToInsert = nombres.map(nombre => ({
+      nombre,
+      piso_id: bulkFormData.piso_id
+    }))
+
+    const { error } = await supabase.from('areas').insert(areasToInsert)
+
+    if (error) {
+      alert('Error al crear áreas: ' + error.message)
+    } else {
+      alert(`Se crearon ${nombres.length} áreas exitosamente`)
+      setBulkDialogOpen(false)
+      setBulkFormData({ nombres: "", piso_id: "" })
+      cargarDatos()
+    }
+  }
+
   async function handleDelete(id: string) {
     if (!confirm('¿Estás seguro de eliminar esta área?')) return
 
@@ -271,37 +403,65 @@ function AreasAdmin() {
           <CardTitle>Gestión de Áreas</CardTitle>
           <CardDescription>Administra las áreas de cada piso</CardDescription>
         </div>
-        <Button onClick={() => openDialog()}>Nueva Área</Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setBulkDialogOpen(true)}>Registro Múltiple</Button>
+          <Button onClick={() => openDialog()}>Nueva Área</Button>
+        </div>
       </CardHeader>
       <CardContent>
         {loading ? (
           <p className="text-center py-8 text-gray-500">Cargando...</p>
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Nombre</TableHead>
-                <TableHead>Piso</TableHead>
-                <TableHead className="text-right">Acciones</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {areas.map((area) => (
-                <TableRow key={area.id}>
-                  <TableCell className="font-medium">{area.nombre}</TableCell>
-                  <TableCell>{area.piso?.nombre}</TableCell>
-                  <TableCell className="text-right space-x-2">
-                    <Button variant="outline" size="sm" onClick={() => openDialog(area)}>
-                      Editar
-                    </Button>
-                    <Button variant="destructive" size="sm" onClick={() => handleDelete(area.id)}>
-                      Eliminar
-                    </Button>
-                  </TableCell>
+          <>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Nombre</TableHead>
+                  <TableHead>Piso</TableHead>
+                  <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {areas.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((area) => (
+                  <TableRow key={area.id}>
+                    <TableCell className="font-medium">{area.nombre}</TableCell>
+                    <TableCell>{area.piso?.nombre}</TableCell>
+                    <TableCell className="text-right space-x-2">
+                      <Button variant="outline" size="sm" onClick={() => openDialog(area)}>
+                        Editar
+                      </Button>
+                      <Button variant="destructive" size="sm" onClick={() => handleDelete(area.id)}>
+                        Eliminar
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+            {areas.length > itemsPerPage && (
+              <div className="flex justify-center gap-2 mt-4">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                >
+                  Anterior
+                </Button>
+                <span className="flex items-center px-3 text-sm">
+                  Página {currentPage} de {Math.ceil(areas.length / itemsPerPage)}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(p => Math.min(Math.ceil(areas.length / itemsPerPage), p + 1))}
+                  disabled={currentPage === Math.ceil(areas.length / itemsPerPage)}
+                >
+                  Siguiente
+                </Button>
+              </div>
+            )}
+          </>
         )}
       </CardContent>
 
@@ -348,6 +508,54 @@ function AreasAdmin() {
           </form>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={bulkDialogOpen} onOpenChange={setBulkDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Registro Múltiple de Áreas</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleBulkSubmit}>
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="bulk-piso">Piso</Label>
+                <Select
+                  id="bulk-piso"
+                  value={bulkFormData.piso_id}
+                  onChange={(e) => setBulkFormData({ ...bulkFormData, piso_id: e.target.value })}
+                  required
+                >
+                  <option value="">Seleccione...</option>
+                  {pisos.map((piso) => (
+                    <option key={piso.id} value={piso.id}>{piso.nombre}</option>
+                  ))}
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="bulk-nombres">Nombres de Áreas (una por línea)</Label>
+                <textarea
+                  id="bulk-nombres"
+                  className="w-full min-h-[200px] p-2 border rounded-md"
+                  value={bulkFormData.nombres}
+                  onChange={(e) => setBulkFormData({ ...bulkFormData, nombres: e.target.value })}
+                  placeholder="Logística&#10;Informática&#10;Laboratorio&#10;Archivos&#10;Seguridad"
+                  required
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Escribe cada nombre de área en una línea separada
+                </p>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setBulkDialogOpen(false)}>
+                Cancelar
+              </Button>
+              <Button type="submit">
+                Crear Áreas
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </Card>
   )
 }
@@ -358,7 +566,9 @@ function UsuariosAdmin() {
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingUsuario, setEditingUsuario] = useState<Usuario | null>(null)
-  const [formData, setFormData] = useState({ nombre: "", cargo: "", area_id: "", activo: true })
+  const [formData, setFormData] = useState({ nombre: "", area_id: "", activo: true })
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage] = useState(10)
 
   useEffect(() => {
     cargarDatos()
@@ -391,7 +601,7 @@ function UsuariosAdmin() {
 
     setDialogOpen(false)
     setEditingUsuario(null)
-    setFormData({ nombre: "", cargo: "", area_id: "", activo: true })
+    setFormData({ nombre: "", area_id: "", activo: true })
     cargarDatos()
   }
 
@@ -407,13 +617,12 @@ function UsuariosAdmin() {
       setEditingUsuario(usuario)
       setFormData({
         nombre: usuario.nombre,
-        cargo: usuario.cargo || "",
         area_id: usuario.area_id,
         activo: usuario.activo
       })
     } else {
       setEditingUsuario(null)
-      setFormData({ nombre: "", cargo: "", area_id: "", activo: true })
+      setFormData({ nombre: "", area_id: "", activo: true })
     }
     setDialogOpen(true)
   }
@@ -431,43 +640,66 @@ function UsuariosAdmin() {
         {loading ? (
           <p className="text-center py-8 text-gray-500">Cargando...</p>
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Nombre</TableHead>
-                <TableHead>Cargo</TableHead>
-                <TableHead>Área</TableHead>
-                <TableHead>Piso</TableHead>
-                <TableHead>Estado</TableHead>
-                <TableHead className="text-right">Acciones</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {usuarios.map((usuario) => (
-                <TableRow key={usuario.id}>
-                  <TableCell className="font-medium">{usuario.nombre}</TableCell>
-                  <TableCell>{usuario.cargo || "-"}</TableCell>
-                  <TableCell>{usuario.area?.nombre}</TableCell>
-                  <TableCell>{usuario.area?.piso?.nombre}</TableCell>
-                  <TableCell>
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                      usuario.activo ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                    }`}>
-                      {usuario.activo ? 'Activo' : 'Inactivo'}
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-right space-x-2">
-                    <Button variant="outline" size="sm" onClick={() => openDialog(usuario)}>
-                      Editar
-                    </Button>
-                    <Button variant="destructive" size="sm" onClick={() => handleDelete(usuario.id)}>
-                      Eliminar
-                    </Button>
-                  </TableCell>
+          <>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Nombre</TableHead>
+                  <TableHead>Área</TableHead>
+                  <TableHead>Piso</TableHead>
+                  <TableHead>Estado</TableHead>
+                  <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {usuarios.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((usuario) => (
+                  <TableRow key={usuario.id}>
+                    <TableCell className="font-medium">{usuario.nombre}</TableCell>
+                    <TableCell>{usuario.area?.nombre}</TableCell>
+                    <TableCell>{usuario.area?.piso?.nombre}</TableCell>
+                    <TableCell>
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        usuario.activo ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                      }`}>
+                        {usuario.activo ? 'Activo' : 'Inactivo'}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-right space-x-2">
+                      <Button variant="outline" size="sm" onClick={() => openDialog(usuario)}>
+                        Editar
+                      </Button>
+                      <Button variant="destructive" size="sm" onClick={() => handleDelete(usuario.id)}>
+                        Eliminar
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+            {usuarios.length > itemsPerPage && (
+              <div className="flex justify-center gap-2 mt-4">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                >
+                  Anterior
+                </Button>
+                <span className="flex items-center px-3 text-sm">
+                  Página {currentPage} de {Math.ceil(usuarios.length / itemsPerPage)}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(p => Math.min(Math.ceil(usuarios.length / itemsPerPage), p + 1))}
+                  disabled={currentPage === Math.ceil(usuarios.length / itemsPerPage)}
+                >
+                  Siguiente
+                </Button>
+              </div>
+            )}
+          </>
         )}
       </CardContent>
 
@@ -486,15 +718,6 @@ function UsuariosAdmin() {
                   onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
                   placeholder="Ej: Juan Pérez"
                   required
-                />
-              </div>
-              <div>
-                <Label htmlFor="cargo">Cargo</Label>
-                <Input
-                  id="cargo"
-                  value={formData.cargo}
-                  onChange={(e) => setFormData({ ...formData, cargo: e.target.value })}
-                  placeholder="Ej: Contador"
                 />
               </div>
               <div>
@@ -550,6 +773,8 @@ function TiposEquiposAdmin() {
     activo: true
   })
   const [campos, setCampos] = useState<any[]>([])
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage] = useState(10)
 
   useEffect(() => {
     cargarTipos()
@@ -660,41 +885,66 @@ function TiposEquiposAdmin() {
             <Button onClick={() => openDialog()}>Crear primer tipo personalizado</Button>
           </div>
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Nombre</TableHead>
-                <TableHead>Descripción</TableHead>
-                <TableHead>Campos</TableHead>
-                <TableHead>Estado</TableHead>
-                <TableHead className="text-right">Acciones</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {tipos.map((tipo) => (
-                <TableRow key={tipo.id}>
-                  <TableCell className="font-medium">{tipo.nombre}</TableCell>
-                  <TableCell>{tipo.descripcion || "-"}</TableCell>
-                  <TableCell>{tipo.campos_adicionales?.length || 0} campos</TableCell>
-                  <TableCell>
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                      tipo.activo ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                    }`}>
-                      {tipo.activo ? 'Activo' : 'Inactivo'}
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-right space-x-2">
-                    <Button variant="outline" size="sm" onClick={() => openDialog(tipo)}>
-                      Editar
-                    </Button>
-                    <Button variant="destructive" size="sm" onClick={() => handleDelete(tipo.id)}>
-                      Eliminar
-                    </Button>
-                  </TableCell>
+          <>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Nombre</TableHead>
+                  <TableHead>Descripción</TableHead>
+                  <TableHead>Campos</TableHead>
+                  <TableHead>Estado</TableHead>
+                  <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {tipos.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((tipo) => (
+                  <TableRow key={tipo.id}>
+                    <TableCell className="font-medium">{tipo.nombre}</TableCell>
+                    <TableCell>{tipo.descripcion || "-"}</TableCell>
+                    <TableCell>{tipo.campos_adicionales?.length || 0} campos</TableCell>
+                    <TableCell>
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        tipo.activo ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                      }`}>
+                        {tipo.activo ? 'Activo' : 'Inactivo'}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-right space-x-2">
+                      <Button variant="outline" size="sm" onClick={() => openDialog(tipo)}>
+                        Editar
+                      </Button>
+                      <Button variant="destructive" size="sm" onClick={() => handleDelete(tipo.id)}>
+                        Eliminar
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+            {tipos.length > itemsPerPage && (
+              <div className="flex justify-center gap-2 mt-4">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                >
+                  Anterior
+                </Button>
+                <span className="flex items-center px-3 text-sm">
+                  Página {currentPage} de {Math.ceil(tipos.length / itemsPerPage)}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(p => Math.min(Math.ceil(tipos.length / itemsPerPage), p + 1))}
+                  disabled={currentPage === Math.ceil(tipos.length / itemsPerPage)}
+                >
+                  Siguiente
+                </Button>
+              </div>
+            )}
+          </>
         )}
       </CardContent>
 

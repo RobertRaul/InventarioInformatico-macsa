@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 
 type EquipoFormData = {
   id: string
@@ -37,6 +38,8 @@ export default function RegistroMultiplePage() {
   const [usuarios, setUsuarios] = useState<Usuario[]>([])
   const [filteredAreas, setFilteredAreas] = useState<Area[]>([])
   const [filteredUsuarios, setFilteredUsuarios] = useState<Usuario[]>([])
+  const [newUserDialogOpen, setNewUserDialogOpen] = useState(false)
+  const [newUserData, setNewUserData] = useState({ nombre: "" })
 
   const [ubicacion, setUbicacion] = useState({
     piso_id: "",
@@ -96,6 +99,39 @@ export default function RegistroMultiplePage() {
     if (pisosRes.data) setPisos(pisosRes.data)
     if (areasRes.data) setAreas(areasRes.data)
     if (usuariosRes.data) setUsuarios(usuariosRes.data)
+  }
+
+  async function handleCreateUser(e: React.FormEvent) {
+    e.preventDefault()
+
+    if (!ubicacion.area_id) {
+      alert('Por favor selecciona un área primero')
+      return
+    }
+
+    try {
+      const { data: newUser, error } = await supabase
+        .from('usuarios')
+        .insert({
+          nombre: newUserData.nombre,
+          area_id: ubicacion.area_id,
+          activo: true
+        })
+        .select()
+        .single()
+
+      if (error) throw error
+
+      setUsuarios([...usuarios, newUser])
+      setFilteredUsuarios([...filteredUsuarios, newUser])
+      setUbicacion({ ...ubicacion, usuario_id: newUser.id })
+      setNewUserDialogOpen(false)
+      setNewUserData({ nombre: "" })
+      alert('Usuario creado exitosamente')
+    } catch (error) {
+      console.error('Error:', error)
+      alert('Error al crear el usuario')
+    }
   }
 
   function agregarEquipo() {
@@ -271,17 +307,30 @@ export default function RegistroMultiplePage() {
 
                   <div>
                     <Label htmlFor="usuario">Usuario</Label>
-                    <Select
-                      id="usuario"
-                      value={ubicacion.usuario_id}
-                      onChange={(e) => setUbicacion({ ...ubicacion, usuario_id: e.target.value })}
-                      disabled={!ubicacion.area_id}
-                    >
-                      <option value="">Sin asignar</option>
-                      {filteredUsuarios.map(usuario => (
-                        <option key={usuario.id} value={usuario.id}>{usuario.nombre}</option>
-                      ))}
-                    </Select>
+                    <div className="flex gap-2">
+                      <Select
+                        id="usuario"
+                        value={ubicacion.usuario_id}
+                        onChange={(e) => setUbicacion({ ...ubicacion, usuario_id: e.target.value })}
+                        disabled={!ubicacion.area_id}
+                        className="flex-1"
+                      >
+                        <option value="">Sin asignar</option>
+                        {filteredUsuarios.map(usuario => (
+                          <option key={usuario.id} value={usuario.id}>{usuario.nombre}</option>
+                        ))}
+                      </Select>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setNewUserDialogOpen(true)}
+                        disabled={!ubicacion.area_id}
+                        title="Crear nuevo usuario"
+                      >
+                        +
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -484,6 +533,39 @@ export default function RegistroMultiplePage() {
             </form>
           </CardContent>
         </Card>
+
+        <Dialog open={newUserDialogOpen} onOpenChange={setNewUserDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Crear Nuevo Usuario</DialogTitle>
+            </DialogHeader>
+            <form onSubmit={handleCreateUser}>
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="new-user-nombre">Nombre Completo *</Label>
+                  <Input
+                    id="new-user-nombre"
+                    value={newUserData.nombre}
+                    onChange={(e) => setNewUserData({ ...newUserData, nombre: e.target.value })}
+                    placeholder="Ej: Juan Pérez"
+                    required
+                  />
+                </div>
+                <div className="p-3 bg-blue-50 rounded-md text-sm text-blue-800">
+                  El usuario se creará en el área seleccionada: <strong>{areas.find(a => a.id === ubicacion.area_id)?.nombre}</strong>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setNewUserDialogOpen(false)}>
+                  Cancelar
+                </Button>
+                <Button type="submit">
+                  Crear Usuario
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   )

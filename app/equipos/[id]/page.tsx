@@ -8,18 +8,16 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 
-export default function RegistroPage() {
+export default function EditarEquipoPage({ params }: { params: { id: string } }) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
+  const [loadingData, setLoadingData] = useState(true)
   const [pisos, setPisos] = useState<Piso[]>([])
   const [areas, setAreas] = useState<Area[]>([])
   const [usuarios, setUsuarios] = useState<Usuario[]>([])
   const [filteredAreas, setFilteredAreas] = useState<Area[]>([])
   const [filteredUsuarios, setFilteredUsuarios] = useState<Usuario[]>([])
-  const [newUserDialogOpen, setNewUserDialogOpen] = useState(false)
-  const [newUserData, setNewUserData] = useState({ nombre: "" })
 
   const [formData, setFormData] = useState({
     piso_id: "",
@@ -51,7 +49,6 @@ export default function RegistroPage() {
     if (formData.piso_id) {
       const areasDelPiso = areas.filter(a => a.piso_id === formData.piso_id)
       setFilteredAreas(areasDelPiso)
-      setFormData(prev => ({ ...prev, area_id: "", usuario_id: "" }))
     }
   }, [formData.piso_id, areas])
 
@@ -59,53 +56,55 @@ export default function RegistroPage() {
     if (formData.area_id) {
       const usuariosDelArea = usuarios.filter(u => u.area_id === formData.area_id)
       setFilteredUsuarios(usuariosDelArea)
-      setFormData(prev => ({ ...prev, usuario_id: "" }))
     }
   }, [formData.area_id, usuarios])
 
   async function cargarDatos() {
-    const [pisosRes, areasRes, usuariosRes] = await Promise.all([
+    setLoadingData(true)
+
+    const [equipoRes, pisosRes, areasRes, usuariosRes] = await Promise.all([
+      supabase.from('equipos').select(`
+        *,
+        usuario:usuarios(*, area:areas(*, piso:pisos(*))),
+        perifericos(*)
+      `).eq('id', params.id).single(),
       supabase.from('pisos').select('*').order('orden', { ascending: false }),
       supabase.from('areas').select('*').order('nombre'),
-      supabase.from('usuarios').select('*').eq('activo', true).order('nombre')
+      supabase.from('usuarios').select('*, area:areas(*)').eq('activo', true).order('nombre')
     ])
 
     if (pisosRes.data) setPisos(pisosRes.data)
     if (areasRes.data) setAreas(areasRes.data)
     if (usuariosRes.data) setUsuarios(usuariosRes.data)
-  }
 
-  async function handleCreateUser(e: React.FormEvent) {
-    e.preventDefault()
+    if (equipoRes.data) {
+      const equipo = equipoRes.data
+      const perifericos = equipo.perifericos || []
 
-    if (!formData.area_id) {
-      alert('Por favor selecciona un área primero')
-      return
+      setFormData({
+        piso_id: equipo.usuario?.area?.piso?.id || "",
+        area_id: equipo.usuario?.area?.id || "",
+        usuario_id: equipo.usuario_id || "",
+        tipo: equipo.tipo as TipoEquipo,
+        codigo_barra: equipo.codigo_barra || "",
+        marca: equipo.marca || "",
+        modelo: equipo.modelo || "",
+        ram: equipo.specs?.ram || "",
+        almacenamiento: equipo.specs?.almacenamiento || "",
+        procesador: equipo.specs?.procesador || "",
+        pulgadas: equipo.specs?.pulgadas || "",
+        estado: equipo.estado,
+        observaciones: equipo.observaciones || "",
+        perifericos: {
+          mouse: perifericos.find((p: any) => p.tipo === 'mouse')?.cantidad || 0,
+          teclado: perifericos.find((p: any) => p.tipo === 'teclado')?.cantidad || 0,
+          parlantes: perifericos.find((p: any) => p.tipo === 'parlantes')?.cantidad || 0,
+          otros: perifericos.find((p: any) => p.tipo === 'otros')?.descripcion || ""
+        }
+      })
     }
 
-    try {
-      const { data: newUser, error } = await supabase
-        .from('usuarios')
-        .insert({
-          nombre: newUserData.nombre,
-          area_id: formData.area_id,
-          activo: true
-        })
-        .select()
-        .single()
-
-      if (error) throw error
-
-      setUsuarios([...usuarios, newUser])
-      setFilteredUsuarios([...filteredUsuarios, newUser])
-      setFormData({ ...formData, usuario_id: newUser.id })
-      setNewUserDialogOpen(false)
-      setNewUserData({ nombre: "" })
-      alert('Usuario creado exitosamente')
-    } catch (error) {
-      console.error('Error:', error)
-      alert('Error al crear el usuario')
-    }
+    setLoadingData(false)
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -123,9 +122,9 @@ export default function RegistroPage() {
         if (formData.pulgadas) specs.pulgadas = formData.pulgadas
       }
 
-      const { data: equipo, error: equipoError } = await supabase
+      const { error: equipoError } = await supabase
         .from('equipos')
-        .insert({
+        .update({
           tipo: formData.tipo,
           usuario_id: formData.usuario_id || null,
           codigo_barra: formData.codigo_barra || null,
@@ -135,37 +134,38 @@ export default function RegistroPage() {
           estado: formData.estado,
           observaciones: formData.observaciones || null
         })
-        .select()
-        .single()
+        .eq('id', params.id)
 
       if (equipoError) throw equipoError
 
-      if (formData.tipo === 'computadora' && equipo) {
+      await supabase.from('perifericos').delete().eq('equipo_id', params.id)
+
+      if (formData.tipo === 'computadora') {
         const perifericos = []
         if (formData.perifericos.mouse > 0) {
           perifericos.push({
-            equipo_id: equipo.id,
+            equipo_id: params.id,
             tipo: 'mouse',
             cantidad: formData.perifericos.mouse
           })
         }
         if (formData.perifericos.teclado > 0) {
           perifericos.push({
-            equipo_id: equipo.id,
+            equipo_id: params.id,
             tipo: 'teclado',
             cantidad: formData.perifericos.teclado
           })
         }
         if (formData.perifericos.parlantes > 0) {
           perifericos.push({
-            equipo_id: equipo.id,
+            equipo_id: params.id,
             tipo: 'parlantes',
             cantidad: formData.perifericos.parlantes
           })
         }
         if (formData.perifericos.otros) {
           perifericos.push({
-            equipo_id: equipo.id,
+            equipo_id: params.id,
             tipo: 'otros',
             cantidad: 1,
             descripcion: formData.perifericos.otros
@@ -181,14 +181,45 @@ export default function RegistroPage() {
         }
       }
 
-      alert('Equipo registrado exitosamente')
+      alert('Equipo actualizado exitosamente')
       router.push('/dashboard')
     } catch (error) {
       console.error('Error:', error)
-      alert('Error al registrar el equipo')
+      alert('Error al actualizar el equipo')
     } finally {
       setLoading(false)
     }
+  }
+
+  async function handleDelete() {
+    if (!confirm('¿Estás seguro de eliminar este equipo? Esta acción no se puede deshacer.')) return
+
+    setLoading(true)
+    try {
+      const { error } = await supabase.from('equipos').delete().eq('id', params.id)
+      if (error) throw error
+
+      alert('Equipo eliminado exitosamente')
+      router.push('/dashboard')
+    } catch (error) {
+      console.error('Error:', error)
+      alert('Error al eliminar el equipo')
+      setLoading(false)
+    }
+  }
+
+  if (loadingData) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-primary-50 to-gold-50 py-8">
+        <div className="container mx-auto px-4">
+          <Card className="max-w-3xl mx-auto">
+            <CardContent className="py-12 text-center">
+              <p className="text-gray-600">Cargando equipo...</p>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -196,8 +227,8 @@ export default function RegistroPage() {
       <div className="container mx-auto px-4">
         <Card className="max-w-3xl mx-auto">
           <CardHeader>
-            <CardTitle className="text-primary-600">Registrar Equipo</CardTitle>
-            <CardDescription>Complete el formulario para añadir un nuevo equipo al inventario</CardDescription>
+            <CardTitle className="text-primary-600">Editar Equipo</CardTitle>
+            <CardDescription>Modifica la información del equipo o elimínalo</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-6">
@@ -208,7 +239,7 @@ export default function RegistroPage() {
                     id="piso"
                     required
                     value={formData.piso_id}
-                    onChange={(e) => setFormData({ ...formData, piso_id: e.target.value })}
+                    onChange={(e) => setFormData({ ...formData, piso_id: e.target.value, area_id: "", usuario_id: "" })}
                   >
                     <option value="">Seleccione...</option>
                     {pisos.map(piso => (
@@ -223,7 +254,7 @@ export default function RegistroPage() {
                     id="area"
                     required
                     value={formData.area_id}
-                    onChange={(e) => setFormData({ ...formData, area_id: e.target.value })}
+                    onChange={(e) => setFormData({ ...formData, area_id: e.target.value, usuario_id: "" })}
                     disabled={!formData.piso_id}
                   >
                     <option value="">Seleccione...</option>
@@ -235,30 +266,17 @@ export default function RegistroPage() {
 
                 <div>
                   <Label htmlFor="usuario">Usuario</Label>
-                  <div className="flex gap-2">
-                    <Select
-                      id="usuario"
-                      value={formData.usuario_id}
-                      onChange={(e) => setFormData({ ...formData, usuario_id: e.target.value })}
-                      disabled={!formData.area_id}
-                      className="flex-1"
-                    >
-                      <option value="">Sin asignar</option>
-                      {filteredUsuarios.map(usuario => (
-                        <option key={usuario.id} value={usuario.id}>{usuario.nombre}</option>
-                      ))}
-                    </Select>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setNewUserDialogOpen(true)}
-                      disabled={!formData.area_id}
-                      title="Crear nuevo usuario"
-                    >
-                      +
-                    </Button>
-                  </div>
+                  <Select
+                    id="usuario"
+                    value={formData.usuario_id}
+                    onChange={(e) => setFormData({ ...formData, usuario_id: e.target.value })}
+                    disabled={!formData.area_id}
+                  >
+                    <option value="">Sin asignar</option>
+                    {filteredUsuarios.map(usuario => (
+                      <option key={usuario.id} value={usuario.id}>{usuario.nombre}</option>
+                    ))}
+                  </Select>
                 </div>
               </div>
 
@@ -285,7 +303,7 @@ export default function RegistroPage() {
                     id="codigo"
                     value={formData.codigo_barra}
                     onChange={(e) => setFormData({ ...formData, codigo_barra: e.target.value })}
-                    placeholder="Ej: XEADSSDEF774"
+                    placeholder="XEADSSDEF774"
                   />
                 </div>
               </div>
@@ -297,7 +315,6 @@ export default function RegistroPage() {
                     id="marca"
                     value={formData.marca}
                     onChange={(e) => setFormData({ ...formData, marca: e.target.value })}
-                    placeholder="Ej: HP, Dell, Samsung"
                   />
                 </div>
 
@@ -307,41 +324,95 @@ export default function RegistroPage() {
                     id="modelo"
                     value={formData.modelo}
                     onChange={(e) => setFormData({ ...formData, modelo: e.target.value })}
-                    placeholder="Ej: I5 1214, ProBook 450"
                   />
                 </div>
               </div>
 
               {formData.tipo === 'computadora' && (
-                <div className="grid md:grid-cols-3 gap-4 p-4 bg-primary-50 rounded-lg">
-                  <div>
-                    <Label htmlFor="procesador">Procesador</Label>
-                    <Input
-                      id="procesador"
-                      value={formData.procesador}
-                      onChange={(e) => setFormData({ ...formData, procesador: e.target.value })}
-                      placeholder="Ej: I5 1214"
-                    />
+                <>
+                  <div className="grid md:grid-cols-3 gap-4 p-4 bg-primary-50 rounded-lg">
+                    <div>
+                      <Label htmlFor="procesador">Procesador</Label>
+                      <Input
+                        id="procesador"
+                        value={formData.procesador}
+                        onChange={(e) => setFormData({ ...formData, procesador: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="ram">RAM</Label>
+                      <Input
+                        id="ram"
+                        value={formData.ram}
+                        onChange={(e) => setFormData({ ...formData, ram: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="almacenamiento">Almacenamiento</Label>
+                      <Input
+                        id="almacenamiento"
+                        value={formData.almacenamiento}
+                        onChange={(e) => setFormData({ ...formData, almacenamiento: e.target.value })}
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <Label htmlFor="ram">RAM</Label>
-                    <Input
-                      id="ram"
-                      value={formData.ram}
-                      onChange={(e) => setFormData({ ...formData, ram: e.target.value })}
-                      placeholder="Ej: 16GB"
-                    />
+
+                  <div className="p-4 bg-gold-50 rounded-lg">
+                    <h3 className="font-semibold mb-3 text-gold-800">Periféricos</h3>
+                    <div className="grid md:grid-cols-3 gap-4">
+                      <div>
+                        <Label htmlFor="mouse">Mouse</Label>
+                        <Input
+                          id="mouse"
+                          type="number"
+                          min="0"
+                          value={formData.perifericos.mouse}
+                          onChange={(e) => setFormData({
+                            ...formData,
+                            perifericos: { ...formData.perifericos, mouse: parseInt(e.target.value) || 0 }
+                          })}
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="teclado">Teclado</Label>
+                        <Input
+                          id="teclado"
+                          type="number"
+                          min="0"
+                          value={formData.perifericos.teclado}
+                          onChange={(e) => setFormData({
+                            ...formData,
+                            perifericos: { ...formData.perifericos, teclado: parseInt(e.target.value) || 0 }
+                          })}
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="parlantes">Parlantes</Label>
+                        <Input
+                          id="parlantes"
+                          type="number"
+                          min="0"
+                          value={formData.perifericos.parlantes}
+                          onChange={(e) => setFormData({
+                            ...formData,
+                            perifericos: { ...formData.perifericos, parlantes: parseInt(e.target.value) || 0 }
+                          })}
+                        />
+                      </div>
+                    </div>
+                    <div className="mt-3">
+                      <Label htmlFor="otros">Otros periféricos</Label>
+                      <Input
+                        id="otros"
+                        value={formData.perifericos.otros}
+                        onChange={(e) => setFormData({
+                          ...formData,
+                          perifericos: { ...formData.perifericos, otros: e.target.value }
+                        })}
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <Label htmlFor="almacenamiento">Almacenamiento</Label>
-                    <Input
-                      id="almacenamiento"
-                      value={formData.almacenamiento}
-                      onChange={(e) => setFormData({ ...formData, almacenamiento: e.target.value })}
-                      placeholder="Ej: 512SSD"
-                    />
-                  </div>
-                </div>
+                </>
               )}
 
               {formData.tipo === 'monitor' && (
@@ -351,67 +422,7 @@ export default function RegistroPage() {
                     id="pulgadas"
                     value={formData.pulgadas}
                     onChange={(e) => setFormData({ ...formData, pulgadas: e.target.value })}
-                    placeholder="Ej: 24, 27"
                   />
-                </div>
-              )}
-
-              {formData.tipo === 'computadora' && (
-                <div className="p-4 bg-gold-50 rounded-lg">
-                  <h3 className="font-semibold mb-3 text-gold-800">Periféricos</h3>
-                  <div className="grid md:grid-cols-3 gap-4">
-                    <div>
-                      <Label htmlFor="mouse">Mouse</Label>
-                      <Input
-                        id="mouse"
-                        type="number"
-                        min="0"
-                        value={formData.perifericos.mouse}
-                        onChange={(e) => setFormData({
-                          ...formData,
-                          perifericos: { ...formData.perifericos, mouse: parseInt(e.target.value) || 0 }
-                        })}
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="teclado">Teclado</Label>
-                      <Input
-                        id="teclado"
-                        type="number"
-                        min="0"
-                        value={formData.perifericos.teclado}
-                        onChange={(e) => setFormData({
-                          ...formData,
-                          perifericos: { ...formData.perifericos, teclado: parseInt(e.target.value) || 0 }
-                        })}
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="parlantes">Parlantes</Label>
-                      <Input
-                        id="parlantes"
-                        type="number"
-                        min="0"
-                        value={formData.perifericos.parlantes}
-                        onChange={(e) => setFormData({
-                          ...formData,
-                          perifericos: { ...formData.perifericos, parlantes: parseInt(e.target.value) || 0 }
-                        })}
-                      />
-                    </div>
-                  </div>
-                  <div className="mt-3">
-                    <Label htmlFor="otros">Otros periféricos</Label>
-                    <Input
-                      id="otros"
-                      value={formData.perifericos.otros}
-                      onChange={(e) => setFormData({
-                        ...formData,
-                        perifericos: { ...formData.perifericos, otros: e.target.value }
-                      })}
-                      placeholder="Ej: Webcam, Micrófono"
-                    />
-                  </div>
                 </div>
               )}
 
@@ -436,59 +447,35 @@ export default function RegistroPage() {
                     id="observaciones"
                     value={formData.observaciones}
                     onChange={(e) => setFormData({ ...formData, observaciones: e.target.value })}
-                    placeholder="Notas adicionales"
                   />
                 </div>
               </div>
 
-              <div className="flex gap-3 justify-end pt-4">
+              <div className="flex gap-3 justify-between pt-4 border-t">
                 <Button
                   type="button"
-                  variant="outline"
-                  onClick={() => router.push('/dashboard')}
+                  variant="destructive"
+                  onClick={handleDelete}
+                  disabled={loading}
                 >
-                  Cancelar
+                  Eliminar Equipo
                 </Button>
-                <Button type="submit" disabled={loading}>
-                  {loading ? 'Guardando...' : 'Registrar Equipo'}
-                </Button>
+                <div className="flex gap-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => router.push('/dashboard')}
+                  >
+                    Cancelar
+                  </Button>
+                  <Button type="submit" disabled={loading}>
+                    {loading ? 'Guardando...' : 'Actualizar Equipo'}
+                  </Button>
+                </div>
               </div>
             </form>
           </CardContent>
         </Card>
-
-        <Dialog open={newUserDialogOpen} onOpenChange={setNewUserDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Crear Nuevo Usuario</DialogTitle>
-            </DialogHeader>
-            <form onSubmit={handleCreateUser}>
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="new-user-nombre">Nombre Completo *</Label>
-                  <Input
-                    id="new-user-nombre"
-                    value={newUserData.nombre}
-                    onChange={(e) => setNewUserData({ ...newUserData, nombre: e.target.value })}
-                    placeholder="Ej: Juan Pérez"
-                    required
-                  />
-                </div>
-                <div className="p-3 bg-blue-50 rounded-md text-sm text-blue-800">
-                  El usuario se creará en el área seleccionada: <strong>{areas.find(a => a.id === formData.area_id)?.nombre}</strong>
-                </div>
-              </div>
-              <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setNewUserDialogOpen(false)}>
-                  Cancelar
-                </Button>
-                <Button type="submit">
-                  Crear Usuario
-                </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
       </div>
     </div>
   )
