@@ -95,7 +95,7 @@ export default function DashboardPage() {
     return matchSearch && matchTipo && matchEstado && matchPiso
   })
 
-  const pisosUnicos = [...new Set(equipos.map(e => e.usuario?.area?.piso?.nombre).filter(Boolean))]
+  const pisosUnicos = Array.from(new Set(equipos.map(e => e.usuario?.area?.piso?.nombre).filter(Boolean))) as string[]
 
   function formatSpecs(specs: any, tipo: string): string {
     if (!specs || Object.keys(specs).length === 0) return '-'

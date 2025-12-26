@@ -36,6 +36,7 @@ export default function ReportesPage() {
 
   useEffect(() => {
     cargarEquiposFiltrados()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filtros])
 
   async function cargarDatos() {
