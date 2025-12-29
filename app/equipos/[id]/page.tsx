@@ -30,6 +30,7 @@ export default function EditarEquipoPage({ params }: { params: { id: string } })
     ram: "",
     almacenamiento: "",
     procesador: "",
+    mac: "",
     pulgadas: "",
     estado: "activo" as EstadoEquipo,
     observaciones: "",
@@ -92,6 +93,7 @@ export default function EditarEquipoPage({ params }: { params: { id: string } })
         ram: equipo.specs?.ram || "",
         almacenamiento: equipo.specs?.almacenamiento || "",
         procesador: equipo.specs?.procesador || "",
+        mac: equipo.specs?.mac || "",
         pulgadas: equipo.specs?.pulgadas || "",
         estado: equipo.estado,
         observaciones: equipo.observaciones || "",
@@ -118,6 +120,7 @@ export default function EditarEquipoPage({ params }: { params: { id: string } })
         if (formData.procesador) specs.procesador = formData.procesador
         if (formData.ram) specs.ram = formData.ram
         if (formData.almacenamiento) specs.almacenamiento = formData.almacenamiento
+        if (formData.mac) specs.mac = formData.mac
       } else if (formData.tipo === 'monitor') {
         if (formData.pulgadas) specs.pulgadas = formData.pulgadas
       }
@@ -330,29 +333,40 @@ export default function EditarEquipoPage({ params }: { params: { id: string } })
 
               {formData.tipo === 'computadora' && (
                 <>
-                  <div className="grid md:grid-cols-3 gap-4 p-4 bg-primary-50 rounded-lg">
-                    <div>
-                      <Label htmlFor="procesador">Procesador</Label>
-                      <Input
-                        id="procesador"
-                        value={formData.procesador}
-                        onChange={(e) => setFormData({ ...formData, procesador: e.target.value })}
-                      />
+                  <div className="p-4 bg-primary-50 rounded-lg">
+                    <div className="grid md:grid-cols-3 gap-4 mb-4">
+                      <div>
+                        <Label htmlFor="procesador">Procesador</Label>
+                        <Input
+                          id="procesador"
+                          value={formData.procesador}
+                          onChange={(e) => setFormData({ ...formData, procesador: e.target.value })}
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="ram">RAM</Label>
+                        <Input
+                          id="ram"
+                          value={formData.ram}
+                          onChange={(e) => setFormData({ ...formData, ram: e.target.value })}
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="almacenamiento">Almacenamiento</Label>
+                        <Input
+                          id="almacenamiento"
+                          value={formData.almacenamiento}
+                          onChange={(e) => setFormData({ ...formData, almacenamiento: e.target.value })}
+                        />
+                      </div>
                     </div>
                     <div>
-                      <Label htmlFor="ram">RAM</Label>
+                      <Label htmlFor="mac">Dirección MAC</Label>
                       <Input
-                        id="ram"
-                        value={formData.ram}
-                        onChange={(e) => setFormData({ ...formData, ram: e.target.value })}
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="almacenamiento">Almacenamiento</Label>
-                      <Input
-                        id="almacenamiento"
-                        value={formData.almacenamiento}
-                        onChange={(e) => setFormData({ ...formData, almacenamiento: e.target.value })}
+                        id="mac"
+                        value={formData.mac}
+                        onChange={(e) => setFormData({ ...formData, mac: e.target.value })}
+                        placeholder="00:1A:2B:3C:4D:5E"
                       />
                     </div>
                   </div>
