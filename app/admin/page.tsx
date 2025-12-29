@@ -62,6 +62,8 @@ export default function AdminPage() {
 }
 
 function PisosAdmin() {
+  const { showToast } = useToast()
+  const { confirm } = useConfirm()
   const [pisos, setPisos] = useState<Piso[]>([])
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -89,21 +91,29 @@ function PisosAdmin() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
 
-    if (editingPiso) {
-      await supabase
-        .from('pisos')
-        .update(formData)
-        .eq('id', editingPiso.id)
-    } else {
-      await supabase
-        .from('pisos')
-        .insert(formData)
-    }
+    try {
+      if (editingPiso) {
+        const { error } = await supabase
+          .from('pisos')
+          .update(formData)
+          .eq('id', editingPiso.id)
+        if (error) throw error
+        showToast('Piso actualizado exitosamente', 'success')
+      } else {
+        const { error } = await supabase
+          .from('pisos')
+          .insert(formData)
+        if (error) throw error
+        showToast('Piso creado exitosamente', 'success')
+      }
 
-    setDialogOpen(false)
-    setEditingPiso(null)
-    setFormData({ nombre: "", orden: 0 })
-    cargarPisos()
+      setDialogOpen(false)
+      setEditingPiso(null)
+      setFormData({ nombre: "", orden: 0 })
+      cargarPisos()
+    } catch (error: any) {
+      showToast(error.message || 'Error al guardar el piso', 'error')
+    }
   }
 
   async function handleBulkSubmit(e: React.FormEvent) {
@@ -115,7 +125,7 @@ function PisosAdmin() {
       .filter(l => l.length > 0)
 
     if (lineas.length === 0) {
-      alert('Por favor ingresa al menos un piso')
+      showToast('Por favor ingresa al menos un piso', 'warning')
       return
     }
 
@@ -126,23 +136,38 @@ function PisosAdmin() {
       return { nombre, orden }
     })
 
-    const { error } = await supabase.from('pisos').insert(pisosToInsert)
+    try {
+      const { error } = await supabase.from('pisos').insert(pisosToInsert)
+      if (error) throw error
 
-    if (error) {
-      alert('Error al crear pisos: ' + error.message)
-    } else {
-      alert(`Se crearon ${lineas.length} pisos exitosamente`)
+      showToast(`${lineas.length} pisos creados exitosamente`, 'success')
       setBulkDialogOpen(false)
       setBulkFormData({ nombres: "" })
       cargarPisos()
+    } catch (error: any) {
+      showToast(error.message || 'Error al crear pisos', 'error')
     }
   }
 
   async function handleDelete(id: string) {
-    if (!confirm('¿Estás seguro de eliminar este piso? Se eliminarán todas sus áreas asociadas.')) return
+    const confirmed = await confirm({
+      title: '¿Eliminar piso?',
+      description: 'Esta acción eliminará el piso y todas sus áreas asociadas. No se puede deshacer.',
+      confirmText: 'Eliminar',
+      cancelText: 'Cancelar',
+      variant: 'destructive'
+    })
 
-    await supabase.from('pisos').delete().eq('id', id)
-    cargarPisos()
+    if (!confirmed) return
+
+    try {
+      const { error } = await supabase.from('pisos').delete().eq('id', id)
+      if (error) throw error
+      showToast('Piso eliminado exitosamente', 'success')
+      cargarPisos()
+    } catch (error: any) {
+      showToast(error.message || 'Error al eliminar el piso', 'error')
+    }
   }
 
   function openDialog(piso?: Piso) {
@@ -304,6 +329,8 @@ function PisosAdmin() {
 }
 
 function AreasAdmin() {
+  const { showToast } = useToast()
+  const { confirm } = useConfirm()
   const [areas, setAreas] = useState<(Area & { piso?: Piso })[]>([])
   const [pisos, setPisos] = useState<Piso[]>([])
   const [loading, setLoading] = useState(true)
@@ -333,21 +360,29 @@ function AreasAdmin() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
 
-    if (editingArea) {
-      await supabase
-        .from('areas')
-        .update(formData)
-        .eq('id', editingArea.id)
-    } else {
-      await supabase
-        .from('areas')
-        .insert(formData)
-    }
+    try {
+      if (editingArea) {
+        const { error } = await supabase
+          .from('areas')
+          .update(formData)
+          .eq('id', editingArea.id)
+        if (error) throw error
+        showToast('Área actualizada exitosamente', 'success')
+      } else {
+        const { error } = await supabase
+          .from('areas')
+          .insert(formData)
+        if (error) throw error
+        showToast('Área creada exitosamente', 'success')
+      }
 
-    setDialogOpen(false)
-    setEditingArea(null)
-    setFormData({ nombre: "", piso_id: "" })
-    cargarDatos()
+      setDialogOpen(false)
+      setEditingArea(null)
+      setFormData({ nombre: "", piso_id: "" })
+      cargarDatos()
+    } catch (error: any) {
+      showToast(error.message || 'Error al guardar el área', 'error')
+    }
   }
 
   async function handleBulkSubmit(e: React.FormEvent) {
@@ -359,7 +394,7 @@ function AreasAdmin() {
       .filter(n => n.length > 0)
 
     if (nombres.length === 0) {
-      alert('Por favor ingresa al menos un nombre de área')
+      showToast('Por favor ingresa al menos un nombre de área', 'warning')
       return
     }
 
@@ -368,23 +403,38 @@ function AreasAdmin() {
       piso_id: bulkFormData.piso_id
     }))
 
-    const { error } = await supabase.from('areas').insert(areasToInsert)
+    try {
+      const { error } = await supabase.from('areas').insert(areasToInsert)
+      if (error) throw error
 
-    if (error) {
-      alert('Error al crear áreas: ' + error.message)
-    } else {
-      alert(`Se crearon ${nombres.length} áreas exitosamente`)
+      showToast(`${nombres.length} áreas creadas exitosamente`, 'success')
       setBulkDialogOpen(false)
       setBulkFormData({ nombres: "", piso_id: "" })
       cargarDatos()
+    } catch (error: any) {
+      showToast(error.message || 'Error al crear áreas', 'error')
     }
   }
 
   async function handleDelete(id: string) {
-    if (!confirm('¿Estás seguro de eliminar esta área?')) return
+    const confirmed = await confirm({
+      title: '¿Eliminar área?',
+      description: 'Esta acción eliminará el área permanentemente. No se puede deshacer.',
+      confirmText: 'Eliminar',
+      cancelText: 'Cancelar',
+      variant: 'destructive'
+    })
 
-    await supabase.from('areas').delete().eq('id', id)
-    cargarDatos()
+    if (!confirmed) return
+
+    try {
+      const { error} = await supabase.from('areas').delete().eq('id', id)
+      if (error) throw error
+      showToast('Área eliminada exitosamente', 'success')
+      cargarDatos()
+    } catch (error: any) {
+      showToast(error.message || 'Error al eliminar el área', 'error')
+    }
   }
 
   function openDialog(area?: Area) {
@@ -563,6 +613,8 @@ function AreasAdmin() {
 }
 
 function UsuariosAdmin() {
+  const { showToast } = useToast()
+  const { confirm } = useConfirm()
   const [usuarios, setUsuarios] = useState<(Usuario & { area?: Area & { piso?: Piso } })[]>([])
   const [areas, setAreas] = useState<(Area & { piso?: Piso })[]>([])
   const [loading, setLoading] = useState(true)
@@ -590,28 +642,50 @@ function UsuariosAdmin() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
 
-    if (editingUsuario) {
-      await supabase
-        .from('usuarios')
-        .update(formData)
-        .eq('id', editingUsuario.id)
-    } else {
-      await supabase
-        .from('usuarios')
-        .insert(formData)
-    }
+    try {
+      if (editingUsuario) {
+        const { error } = await supabase
+          .from('usuarios')
+          .update(formData)
+          .eq('id', editingUsuario.id)
+        if (error) throw error
+        showToast('Usuario actualizado exitosamente', 'success')
+      } else {
+        const { error } = await supabase
+          .from('usuarios')
+          .insert(formData)
+        if (error) throw error
+        showToast('Usuario creado exitosamente', 'success')
+      }
 
-    setDialogOpen(false)
-    setEditingUsuario(null)
-    setFormData({ nombre: "", area_id: "", activo: true })
-    cargarDatos()
+      setDialogOpen(false)
+      setEditingUsuario(null)
+      setFormData({ nombre: "", area_id: "", activo: true })
+      cargarDatos()
+    } catch (error: any) {
+      showToast(error.message || 'Error al guardar el usuario', 'error')
+    }
   }
 
   async function handleDelete(id: string) {
-    if (!confirm('¿Estás seguro de eliminar este usuario?')) return
+    const confirmed = await confirm({
+      title: '¿Eliminar usuario?',
+      description: 'Esta acción eliminará el usuario permanentemente. No se puede deshacer.',
+      confirmText: 'Eliminar',
+      cancelText: 'Cancelar',
+      variant: 'destructive'
+    })
 
-    await supabase.from('usuarios').delete().eq('id', id)
-    cargarDatos()
+    if (!confirmed) return
+
+    try {
+      const { error } = await supabase.from('usuarios').delete().eq('id', id)
+      if (error) throw error
+      showToast('Usuario eliminado exitosamente', 'success')
+      cargarDatos()
+    } catch (error: any) {
+      showToast(error.message || 'Error al eliminar el usuario', 'error')
+    }
   }
 
   function openDialog(usuario?: Usuario) {
