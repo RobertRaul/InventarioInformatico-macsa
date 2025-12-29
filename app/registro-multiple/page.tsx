@@ -19,6 +19,7 @@ type EquipoFormData = {
   ram: string
   almacenamiento: string
   procesador: string
+  mac: string
   pulgadas: string
   estado: EstadoEquipo
   observaciones: string
@@ -57,6 +58,7 @@ export default function RegistroMultiplePage() {
       ram: "",
       almacenamiento: "",
       procesador: "",
+      mac: "",
       pulgadas: "",
       estado: "activo",
       observaciones: "",
@@ -144,6 +146,7 @@ export default function RegistroMultiplePage() {
       ram: "",
       almacenamiento: "",
       procesador: "",
+      mac: "",
       pulgadas: "",
       estado: "activo",
       observaciones: "",
@@ -188,6 +191,7 @@ export default function RegistroMultiplePage() {
           if (equipo.procesador) specs.procesador = equipo.procesador
           if (equipo.ram) specs.ram = equipo.ram
           if (equipo.almacenamiento) specs.almacenamiento = equipo.almacenamiento
+          if (equipo.mac) specs.mac = equipo.mac
         } else if (equipo.tipo === 'monitor') {
           if (equipo.pulgadas) specs.pulgadas = equipo.pulgadas
         }
@@ -408,29 +412,39 @@ export default function RegistroMultiplePage() {
                       </div>
 
                       {equipo.tipo === 'computadora' && (
-                        <div className="grid md:grid-cols-3 gap-4 p-3 bg-blue-50 rounded-lg mb-4">
-                          <div>
-                            <Label>Procesador</Label>
-                            <Input
-                              value={equipo.procesador}
-                              onChange={(e) => actualizarEquipo(equipo.id, 'procesador', e.target.value)}
-                              placeholder="I5 1214"
-                            />
+                        <div className="p-3 bg-blue-50 rounded-lg mb-4">
+                          <div className="grid md:grid-cols-3 gap-4 mb-3">
+                            <div>
+                              <Label>Procesador</Label>
+                              <Input
+                                value={equipo.procesador}
+                                onChange={(e) => actualizarEquipo(equipo.id, 'procesador', e.target.value)}
+                                placeholder="I5 1214"
+                              />
+                            </div>
+                            <div>
+                              <Label>RAM</Label>
+                              <Input
+                                value={equipo.ram}
+                                onChange={(e) => actualizarEquipo(equipo.id, 'ram', e.target.value)}
+                                placeholder="16GB"
+                              />
+                            </div>
+                            <div>
+                              <Label>Almacenamiento</Label>
+                              <Input
+                                value={equipo.almacenamiento}
+                                onChange={(e) => actualizarEquipo(equipo.id, 'almacenamiento', e.target.value)}
+                                placeholder="512SSD"
+                              />
+                            </div>
                           </div>
                           <div>
-                            <Label>RAM</Label>
+                            <Label>Dirección MAC</Label>
                             <Input
-                              value={equipo.ram}
-                              onChange={(e) => actualizarEquipo(equipo.id, 'ram', e.target.value)}
-                              placeholder="16GB"
-                            />
-                          </div>
-                          <div>
-                            <Label>Almacenamiento</Label>
-                            <Input
-                              value={equipo.almacenamiento}
-                              onChange={(e) => actualizarEquipo(equipo.id, 'almacenamiento', e.target.value)}
-                              placeholder="512SSD"
+                              value={equipo.mac}
+                              onChange={(e) => actualizarEquipo(equipo.id, 'mac', e.target.value)}
+                              placeholder="00:1A:2B:3C:4D:5E"
                             />
                           </div>
                         </div>

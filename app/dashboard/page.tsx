@@ -182,6 +182,7 @@ export default function DashboardPage() {
       if (specs.procesador) parts.push(specs.procesador)
       if (specs.ram) parts.push(specs.ram)
       if (specs.almacenamiento) parts.push(specs.almacenamiento)
+      if (specs.mac) parts.push(`MAC: ${specs.mac}`)
       return parts.join(' / ') || '-'
     }
 
