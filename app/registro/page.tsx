@@ -141,18 +141,34 @@ export default function RegistroPage() {
         if (formData.pulgadas) specs.pulgadas = formData.pulgadas
       }
 
+      // Verificar si es un tipo personalizado
+      const tiposEstandar = ['computadora', 'monitor', 'impresora', 'scanner', 'anexo']
+      const esTipoCustom = !tiposEstandar.includes(formData.tipo)
+      const tipoCustom = esTipoCustom ? tiposCustom.find(t => t.nombre.toLowerCase() === formData.tipo) : null
+
+      const equipoData: any = {
+        usuario_id: formData.usuario_id || null,
+        codigo_barra: formData.codigo_barra || null,
+        marca: formData.marca || null,
+        modelo: formData.modelo || null,
+        specs,
+        estado: formData.estado,
+        observaciones: formData.observaciones || null
+      }
+
+      if (esTipoCustom && tipoCustom) {
+        // Si es tipo personalizado, usar tipo_custom_id y poner NULL en tipo
+        equipoData.tipo = null
+        equipoData.tipo_custom_id = tipoCustom.id
+      } else {
+        // Si es tipo estándar, usar el campo tipo
+        equipoData.tipo = formData.tipo
+        equipoData.tipo_custom_id = null
+      }
+
       const { data: equipo, error: equipoError } = await supabase
         .from('equipos')
-        .insert({
-          tipo: formData.tipo,
-          usuario_id: formData.usuario_id || null,
-          codigo_barra: formData.codigo_barra || null,
-          marca: formData.marca || null,
-          modelo: formData.modelo || null,
-          specs,
-          estado: formData.estado,
-          observaciones: formData.observaciones || null
-        })
+        .insert(equipoData)
         .select()
         .single()
 

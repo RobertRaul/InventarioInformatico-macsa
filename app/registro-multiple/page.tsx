@@ -217,18 +217,34 @@ export default function RegistroMultiplePage() {
           if (equipo.pulgadas) specs.pulgadas = equipo.pulgadas
         }
 
+        // Verificar si es un tipo personalizado
+        const tiposEstandar = ['computadora', 'monitor', 'impresora', 'scanner', 'anexo']
+        const esTipoCustom = !tiposEstandar.includes(equipo.tipo)
+        const tipoCustom = esTipoCustom ? tiposCustom.find(t => t.nombre.toLowerCase() === equipo.tipo) : null
+
+        const equipoData: any = {
+          usuario_id: ubicacion.usuario_id || null,
+          codigo_barra: equipo.codigo_barra || null,
+          marca: equipo.marca || null,
+          modelo: equipo.modelo || null,
+          specs,
+          estado: equipo.estado,
+          observaciones: equipo.observaciones || null
+        }
+
+        if (esTipoCustom && tipoCustom) {
+          // Si es tipo personalizado, usar tipo_custom_id y poner NULL en tipo
+          equipoData.tipo = null
+          equipoData.tipo_custom_id = tipoCustom.id
+        } else {
+          // Si es tipo estándar, usar el campo tipo
+          equipoData.tipo = equipo.tipo
+          equipoData.tipo_custom_id = null
+        }
+
         const { data: equipoCreado, error: equipoError } = await supabase
           .from('equipos')
-          .insert({
-            tipo: equipo.tipo,
-            usuario_id: ubicacion.usuario_id || null,
-            codigo_barra: equipo.codigo_barra || null,
-            marca: equipo.marca || null,
-            modelo: equipo.modelo || null,
-            specs,
-            estado: equipo.estado,
-            observaciones: equipo.observaciones || null
-          })
+          .insert(equipoData)
           .select()
           .single()
 

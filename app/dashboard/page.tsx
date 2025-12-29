@@ -13,7 +13,11 @@ import { useConfirm } from "@/components/ui/confirm-dialog"
 
 type EquipoCompleto = {
   id: string
-  tipo: string
+  tipo: string | null
+  tipo_custom_id: string | null
+  tipo_custom: {
+    nombre: string
+  } | null
   codigo_barra: string | null
   marca: string | null
   modelo: string | null
@@ -72,6 +76,9 @@ export default function DashboardPage() {
               )
             )
           ),
+          tipo_custom:tipos_equipos_custom (
+            nombre
+          ),
           perifericos (
             tipo,
             cantidad,
@@ -119,7 +126,7 @@ export default function DashboardPage() {
       equipo.modelo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       equipo.usuario?.nombre.toLowerCase().includes(searchTerm.toLowerCase())
 
-    const matchTipo = !filterTipo || equipo.tipo === filterTipo
+    const matchTipo = !filterTipo || getTipoNombre(equipo).toLowerCase() === filterTipo.toLowerCase()
     const matchEstado = !filterEstado || equipo.estado === filterEstado
     const matchPiso = !filterPiso || equipo.usuario?.area?.piso?.nombre === filterPiso
     const matchUsuario = !filterUsuario || equipo.usuario?.nombre === filterUsuario
@@ -133,8 +140,8 @@ export default function DashboardPage() {
 
     switch (sortField) {
       case "tipo":
-        aValue = a.tipo
-        bValue = b.tipo
+        aValue = getTipoNombre(a)
+        bValue = getTipoNombre(b)
         break
       case "marca":
         aValue = a.marca || ""
@@ -173,6 +180,7 @@ export default function DashboardPage() {
 
   const pisosUnicos = Array.from(new Set(equipos.map(e => e.usuario?.area?.piso?.nombre).filter(Boolean))) as string[]
   const usuariosUnicos = Array.from(new Set(equipos.map(e => e.usuario?.nombre).filter(Boolean))) as string[]
+  const tiposUnicos = Array.from(new Set(equipos.map(e => getTipoNombre(e)).filter(Boolean))) as string[]
 
   function handleSort(field: string) {
     if (sortField === field) {
@@ -186,6 +194,10 @@ export default function DashboardPage() {
   function handlePageChange(page: number) {
     setCurrentPage(page)
     window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  function getTipoNombre(equipo: EquipoCompleto): string {
+    return equipo.tipo_custom?.nombre || equipo.tipo || '-'
   }
 
   function formatSpecs(specs: any, tipo: string): string {
@@ -301,11 +313,9 @@ export default function DashboardPage() {
               <div>
                 <Select value={filterTipo} onChange={(e) => setFilterTipo(e.target.value)}>
                   <option value="">Todos los tipos</option>
-                  <option value="computadora">Computadora</option>
-                  <option value="monitor">Monitor</option>
-                  <option value="impresora">Impresora</option>
-                  <option value="scanner">Scanner</option>
-                  <option value="anexo">Anexo</option>
+                  {tiposUnicos.sort().map(tipo => (
+                    <option key={tipo} value={tipo}>{tipo.charAt(0).toUpperCase() + tipo.slice(1)}</option>
+                  ))}
                 </Select>
               </div>
               <div>
@@ -447,14 +457,14 @@ export default function DashboardPage() {
                       </td>
                       <td className="px-4 py-3 text-sm">
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary-100 text-primary-800 capitalize">
-                          {equipo.tipo}
+                          {getTipoNombre(equipo)}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-sm">
                         <div>
                           {equipo.marca && <div className="font-medium">{equipo.marca}</div>}
                           {equipo.modelo && <div className="text-gray-600">{equipo.modelo}</div>}
-                          <div className="text-xs text-gray-500 mt-1">{formatSpecs(equipo.specs, equipo.tipo)}</div>
+                          <div className="text-xs text-gray-500 mt-1">{formatSpecs(equipo.specs, equipo.tipo || getTipoNombre(equipo))}</div>
                         </div>
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-600">
