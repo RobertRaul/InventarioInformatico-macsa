@@ -8,6 +8,8 @@ import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { exportToPDF, exportToExcel } from "@/lib/export-utils"
+import { useToast } from "@/components/ui/toast"
+import { useConfirm } from "@/components/ui/confirm-dialog"
 
 type EquipoCompleto = {
   id: string
@@ -36,12 +38,15 @@ type EquipoCompleto = {
 
 export default function DashboardPage() {
   const router = useRouter()
+  const { showToast } = useToast()
+  const { confirm } = useConfirm()
   const [equipos, setEquipos] = useState<EquipoCompleto[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [filterTipo, setFilterTipo] = useState("")
   const [filterEstado, setFilterEstado] = useState("")
   const [filterPiso, setFilterPiso] = useState("")
+  const [filterUsuario, setFilterUsuario] = useState("")
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage, setItemsPerPage] = useState(20)
   const [sortField, setSortField] = useState<string>("created_at")
@@ -77,26 +82,33 @@ export default function DashboardPage() {
 
       if (error) throw error
       setEquipos(data || [])
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error:', error)
-      alert('Error al cargar equipos')
+      showToast(error.message || 'Error al cargar equipos', 'error')
     } finally {
       setLoading(false)
     }
   }
 
   async function handleDelete(id: string) {
-    if (!confirm('¿Estás seguro de eliminar este equipo? Esta acción no se puede deshacer.')) return
+    const confirmed = await confirm({
+      title: '¿Eliminar equipo?',
+      description: 'Esta acción eliminará el equipo permanentemente. No se puede deshacer.',
+      confirmText: 'Eliminar',
+      cancelText: 'Cancelar',
+      variant: 'destructive'
+    })
+    if (!confirmed) return
 
     try {
       const { error } = await supabase.from('equipos').delete().eq('id', id)
       if (error) throw error
 
-      alert('Equipo eliminado exitosamente')
+      showToast('Equipo eliminado exitosamente', 'success')
       cargarEquipos()
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error:', error)
-      alert('Error al eliminar el equipo')
+      showToast(error.message || 'Error al eliminar el equipo', 'error')
     }
   }
 
@@ -110,8 +122,9 @@ export default function DashboardPage() {
     const matchTipo = !filterTipo || equipo.tipo === filterTipo
     const matchEstado = !filterEstado || equipo.estado === filterEstado
     const matchPiso = !filterPiso || equipo.usuario?.area?.piso?.nombre === filterPiso
+    const matchUsuario = !filterUsuario || equipo.usuario?.nombre === filterUsuario
 
-    return matchSearch && matchTipo && matchEstado && matchPiso
+    return matchSearch && matchTipo && matchEstado && matchPiso && matchUsuario
   })
 
   const equiposOrdenados = [...equiposFiltrados].sort((a, b) => {
@@ -159,6 +172,7 @@ export default function DashboardPage() {
   const equiposPaginados = equiposOrdenados.slice(startIndex, endIndex)
 
   const pisosUnicos = Array.from(new Set(equipos.map(e => e.usuario?.area?.piso?.nombre).filter(Boolean))) as string[]
+  const usuariosUnicos = Array.from(new Set(equipos.map(e => e.usuario?.nombre).filter(Boolean))) as string[]
 
   function handleSort(field: string) {
     if (sortField === field) {
@@ -183,6 +197,8 @@ export default function DashboardPage() {
       if (specs.ram) parts.push(specs.ram)
       if (specs.almacenamiento) parts.push(specs.almacenamiento)
       if (specs.mac) parts.push(`MAC: ${specs.mac}`)
+      if (specs.ip) parts.push(`IP: ${specs.ip}`)
+      if (specs.anydesk) parts.push(`AnyDesk: ${specs.anydesk}`)
       return parts.join(' / ') || '-'
     }
 
@@ -234,7 +250,8 @@ export default function DashboardPage() {
                       searchTerm && `Búsqueda: ${searchTerm}`,
                       filterTipo && `Tipo: ${filterTipo}`,
                       filterEstado && `Estado: ${filterEstado}`,
-                      filterPiso && `Piso: ${filterPiso}`
+                      filterPiso && `Piso: ${filterPiso}`,
+                      filterUsuario && `Usuario: ${filterUsuario}`
                     ].filter(Boolean).join(', ')
 
                     exportToExcel(equiposFiltrados, filtrosTexto)
@@ -248,7 +265,8 @@ export default function DashboardPage() {
                       searchTerm && `Búsqueda: ${searchTerm}`,
                       filterTipo && `Tipo: ${filterTipo}`,
                       filterEstado && `Estado: ${filterEstado}`,
-                      filterPiso && `Piso: ${filterPiso}`
+                      filterPiso && `Piso: ${filterPiso}`,
+                      filterUsuario && `Usuario: ${filterUsuario}`
                     ].filter(Boolean).join(', ')
 
                     exportToPDF(equiposFiltrados, filtrosTexto)
@@ -272,7 +290,7 @@ export default function DashboardPage() {
             <CardTitle className="text-lg">Filtros</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid md:grid-cols-4 gap-4">
+            <div className="grid md:grid-cols-5 gap-4">
               <div>
                 <Input
                   placeholder="Buscar por código, marca, modelo..."
@@ -307,6 +325,14 @@ export default function DashboardPage() {
                   ))}
                 </Select>
               </div>
+              <div>
+                <Select value={filterUsuario} onChange={(e) => setFilterUsuario(e.target.value)}>
+                  <option value="">Todos los usuarios</option>
+                  {usuariosUnicos.map(usuario => (
+                    <option key={usuario} value={usuario}>{usuario}</option>
+                  ))}
+                </Select>
+              </div>
             </div>
             <div className="mt-3 flex justify-between items-center">
               <p className="text-sm text-gray-600">
@@ -323,7 +349,7 @@ export default function DashboardPage() {
                   <option value="50">50 por página</option>
                   <option value="100">100 por página</option>
                 </Select>
-                {(searchTerm || filterTipo || filterEstado || filterPiso) && (
+                {(searchTerm || filterTipo || filterEstado || filterPiso || filterUsuario) && (
                   <Button
                     variant="ghost"
                     size="sm"
@@ -332,6 +358,7 @@ export default function DashboardPage() {
                       setFilterTipo("")
                       setFilterEstado("")
                       setFilterPiso("")
+                      setFilterUsuario("")
                     }}
                   >
                     Limpiar filtros

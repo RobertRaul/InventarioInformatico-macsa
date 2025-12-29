@@ -9,13 +9,23 @@ import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { useToast } from "@/components/ui/toast"
+
+type TipoCustom = {
+  id: string
+  nombre: string
+  descripcion: string | null
+  campos_adicionales: any[]
+}
 
 export default function RegistroPage() {
   const router = useRouter()
+  const { showToast } = useToast()
   const [loading, setLoading] = useState(false)
   const [pisos, setPisos] = useState<Piso[]>([])
   const [areas, setAreas] = useState<Area[]>([])
   const [usuarios, setUsuarios] = useState<Usuario[]>([])
+  const [tiposCustom, setTiposCustom] = useState<TipoCustom[]>([])
   const [filteredAreas, setFilteredAreas] = useState<Area[]>([])
   const [filteredUsuarios, setFilteredUsuarios] = useState<Usuario[]>([])
   const [newUserDialogOpen, setNewUserDialogOpen] = useState(false)
@@ -33,6 +43,8 @@ export default function RegistroPage() {
     almacenamiento: "",
     procesador: "",
     mac: "",
+    ip: "",
+    anydesk: "",
     pulgadas: "",
     estado: "activo" as EstadoEquipo,
     observaciones: "",
@@ -65,22 +77,24 @@ export default function RegistroPage() {
   }, [formData.area_id, usuarios])
 
   async function cargarDatos() {
-    const [pisosRes, areasRes, usuariosRes] = await Promise.all([
+    const [pisosRes, areasRes, usuariosRes, tiposCustomRes] = await Promise.all([
       supabase.from('pisos').select('*').order('orden', { ascending: false }),
       supabase.from('areas').select('*').order('nombre'),
-      supabase.from('usuarios').select('*').eq('activo', true).order('nombre')
+      supabase.from('usuarios').select('*').eq('activo', true).order('nombre'),
+      supabase.from('tipos_equipos_custom').select('*').eq('activo', true).order('nombre')
     ])
 
     if (pisosRes.data) setPisos(pisosRes.data)
     if (areasRes.data) setAreas(areasRes.data)
     if (usuariosRes.data) setUsuarios(usuariosRes.data)
+    if (tiposCustomRes.data) setTiposCustom(tiposCustomRes.data)
   }
 
   async function handleCreateUser(e: React.FormEvent) {
     e.preventDefault()
 
     if (!formData.area_id) {
-      alert('Por favor selecciona un área primero')
+      showToast('Por favor selecciona un área primero', 'warning')
       return
     }
 
@@ -102,10 +116,10 @@ export default function RegistroPage() {
       setFormData({ ...formData, usuario_id: newUser.id })
       setNewUserDialogOpen(false)
       setNewUserData({ nombre: "" })
-      alert('Usuario creado exitosamente')
-    } catch (error) {
+      showToast('Usuario creado exitosamente', 'success')
+    } catch (error: any) {
       console.error('Error:', error)
-      alert('Error al crear el usuario')
+      showToast(error.message || 'Error al crear el usuario', 'error')
     }
   }
 
@@ -121,6 +135,8 @@ export default function RegistroPage() {
         if (formData.ram) specs.ram = formData.ram
         if (formData.almacenamiento) specs.almacenamiento = formData.almacenamiento
         if (formData.mac) specs.mac = formData.mac
+        if (formData.ip) specs.ip = formData.ip
+        if (formData.anydesk) specs.anydesk = formData.anydesk
       } else if (formData.tipo === 'monitor') {
         if (formData.pulgadas) specs.pulgadas = formData.pulgadas
       }
@@ -183,11 +199,11 @@ export default function RegistroPage() {
         }
       }
 
-      alert('Equipo registrado exitosamente')
+      showToast('Equipo registrado exitosamente', 'success')
       router.push('/dashboard')
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error:', error)
-      alert('Error al registrar el equipo')
+      showToast(error.message || 'Error al registrar el equipo', 'error')
     } finally {
       setLoading(false)
     }
@@ -278,6 +294,11 @@ export default function RegistroPage() {
                     <option value="impresora">Impresora</option>
                     <option value="scanner">Scanner</option>
                     <option value="anexo">Anexo</option>
+                    {tiposCustom.map(tipo => (
+                      <option key={tipo.id} value={tipo.nombre.toLowerCase()}>
+                        {tipo.nombre}
+                      </option>
+                    ))}
                   </Select>
                 </div>
 
@@ -345,14 +366,34 @@ export default function RegistroPage() {
                       />
                     </div>
                   </div>
-                  <div>
-                    <Label htmlFor="mac">Dirección MAC</Label>
-                    <Input
-                      id="mac"
-                      value={formData.mac}
-                      onChange={(e) => setFormData({ ...formData, mac: e.target.value })}
-                      placeholder="Ej: 00:1A:2B:3C:4D:5E"
-                    />
+                  <div className="grid md:grid-cols-3 gap-4">
+                    <div>
+                      <Label htmlFor="mac">Dirección MAC</Label>
+                      <Input
+                        id="mac"
+                        value={formData.mac}
+                        onChange={(e) => setFormData({ ...formData, mac: e.target.value })}
+                        placeholder="Ej: 00:1A:2B:3C:4D:5E"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="ip">Dirección IP</Label>
+                      <Input
+                        id="ip"
+                        value={formData.ip}
+                        onChange={(e) => setFormData({ ...formData, ip: e.target.value })}
+                        placeholder="Ej: 192.168.1.100"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="anydesk">AnyDesk</Label>
+                      <Input
+                        id="anydesk"
+                        value={formData.anydesk}
+                        onChange={(e) => setFormData({ ...formData, anydesk: e.target.value })}
+                        placeholder="Ej: 123 456 789"
+                      />
+                    </div>
                   </div>
                 </div>
               )}

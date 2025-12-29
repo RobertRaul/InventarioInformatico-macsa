@@ -8,9 +8,13 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { useToast } from "@/components/ui/toast"
+import { useConfirm } from "@/components/ui/confirm-dialog"
 
 export default function EditarEquipoPage({ params }: { params: { id: string } }) {
   const router = useRouter()
+  const { showToast } = useToast()
+  const { confirm } = useConfirm()
   const [loading, setLoading] = useState(false)
   const [loadingData, setLoadingData] = useState(true)
   const [pisos, setPisos] = useState<Piso[]>([])
@@ -31,6 +35,8 @@ export default function EditarEquipoPage({ params }: { params: { id: string } })
     almacenamiento: "",
     procesador: "",
     mac: "",
+    ip: "",
+    anydesk: "",
     pulgadas: "",
     estado: "activo" as EstadoEquipo,
     observaciones: "",
@@ -94,6 +100,8 @@ export default function EditarEquipoPage({ params }: { params: { id: string } })
         almacenamiento: equipo.specs?.almacenamiento || "",
         procesador: equipo.specs?.procesador || "",
         mac: equipo.specs?.mac || "",
+        ip: equipo.specs?.ip || "",
+        anydesk: equipo.specs?.anydesk || "",
         pulgadas: equipo.specs?.pulgadas || "",
         estado: equipo.estado,
         observaciones: equipo.observaciones || "",
@@ -121,6 +129,8 @@ export default function EditarEquipoPage({ params }: { params: { id: string } })
         if (formData.ram) specs.ram = formData.ram
         if (formData.almacenamiento) specs.almacenamiento = formData.almacenamiento
         if (formData.mac) specs.mac = formData.mac
+        if (formData.ip) specs.ip = formData.ip
+        if (formData.anydesk) specs.anydesk = formData.anydesk
       } else if (formData.tipo === 'monitor') {
         if (formData.pulgadas) specs.pulgadas = formData.pulgadas
       }
@@ -184,29 +194,36 @@ export default function EditarEquipoPage({ params }: { params: { id: string } })
         }
       }
 
-      alert('Equipo actualizado exitosamente')
+      showToast('Equipo actualizado exitosamente', 'success')
       router.push('/dashboard')
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error:', error)
-      alert('Error al actualizar el equipo')
+      showToast(error.message || 'Error al actualizar el equipo', 'error')
     } finally {
       setLoading(false)
     }
   }
 
   async function handleDelete() {
-    if (!confirm('¿Estás seguro de eliminar este equipo? Esta acción no se puede deshacer.')) return
+    const confirmed = await confirm({
+      title: '¿Eliminar equipo?',
+      description: 'Esta acción eliminará el equipo permanentemente. No se puede deshacer.',
+      confirmText: 'Eliminar',
+      cancelText: 'Cancelar',
+      variant: 'destructive'
+    })
+    if (!confirmed) return
 
     setLoading(true)
     try {
       const { error } = await supabase.from('equipos').delete().eq('id', params.id)
       if (error) throw error
 
-      alert('Equipo eliminado exitosamente')
+      showToast('Equipo eliminado exitosamente', 'success')
       router.push('/dashboard')
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error:', error)
-      alert('Error al eliminar el equipo')
+      showToast(error.message || 'Error al eliminar el equipo', 'error')
       setLoading(false)
     }
   }
@@ -360,14 +377,34 @@ export default function EditarEquipoPage({ params }: { params: { id: string } })
                         />
                       </div>
                     </div>
-                    <div>
-                      <Label htmlFor="mac">Dirección MAC</Label>
-                      <Input
-                        id="mac"
-                        value={formData.mac}
-                        onChange={(e) => setFormData({ ...formData, mac: e.target.value })}
-                        placeholder="00:1A:2B:3C:4D:5E"
-                      />
+                    <div className="grid md:grid-cols-3 gap-4">
+                      <div>
+                        <Label htmlFor="mac">Dirección MAC</Label>
+                        <Input
+                          id="mac"
+                          value={formData.mac}
+                          onChange={(e) => setFormData({ ...formData, mac: e.target.value })}
+                          placeholder="00:1A:2B:3C:4D:5E"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="ip">Dirección IP</Label>
+                        <Input
+                          id="ip"
+                          value={formData.ip}
+                          onChange={(e) => setFormData({ ...formData, ip: e.target.value })}
+                          placeholder="192.168.1.100"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="anydesk">AnyDesk</Label>
+                        <Input
+                          id="anydesk"
+                          value={formData.anydesk}
+                          onChange={(e) => setFormData({ ...formData, anydesk: e.target.value })}
+                          placeholder="123 456 789"
+                        />
+                      </div>
                     </div>
                   </div>
 

@@ -9,6 +9,14 @@ import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { useToast } from "@/components/ui/toast"
+
+type TipoCustom = {
+  id: string
+  nombre: string
+  descripcion: string | null
+  campos_adicionales: any[]
+}
 
 type EquipoFormData = {
   id: string
@@ -20,6 +28,8 @@ type EquipoFormData = {
   almacenamiento: string
   procesador: string
   mac: string
+  ip: string
+  anydesk: string
   pulgadas: string
   estado: EstadoEquipo
   observaciones: string
@@ -33,14 +43,17 @@ type EquipoFormData = {
 
 export default function RegistroMultiplePage() {
   const router = useRouter()
+  const { showToast } = useToast()
   const [loading, setLoading] = useState(false)
   const [pisos, setPisos] = useState<Piso[]>([])
   const [areas, setAreas] = useState<Area[]>([])
   const [usuarios, setUsuarios] = useState<Usuario[]>([])
+  const [tiposCustom, setTiposCustom] = useState<TipoCustom[]>([])
   const [filteredAreas, setFilteredAreas] = useState<Area[]>([])
   const [filteredUsuarios, setFilteredUsuarios] = useState<Usuario[]>([])
   const [newUserDialogOpen, setNewUserDialogOpen] = useState(false)
   const [newUserData, setNewUserData] = useState({ nombre: "" })
+  const [activeEquipoId, setActiveEquipoId] = useState<string>("")
 
   const [ubicacion, setUbicacion] = useState({
     piso_id: "",
@@ -59,6 +72,8 @@ export default function RegistroMultiplePage() {
       almacenamiento: "",
       procesador: "",
       mac: "",
+      ip: "",
+      anydesk: "",
       pulgadas: "",
       estado: "activo",
       observaciones: "",
@@ -92,22 +107,24 @@ export default function RegistroMultiplePage() {
   }, [ubicacion.area_id, usuarios])
 
   async function cargarDatos() {
-    const [pisosRes, areasRes, usuariosRes] = await Promise.all([
+    const [pisosRes, areasRes, usuariosRes, tiposCustomRes] = await Promise.all([
       supabase.from('pisos').select('*').order('orden', { ascending: false }),
       supabase.from('areas').select('*').order('nombre'),
-      supabase.from('usuarios').select('*').eq('activo', true).order('nombre')
+      supabase.from('usuarios').select('*').eq('activo', true).order('nombre'),
+      supabase.from('tipos_equipos_custom').select('*').eq('activo', true).order('nombre')
     ])
 
     if (pisosRes.data) setPisos(pisosRes.data)
     if (areasRes.data) setAreas(areasRes.data)
     if (usuariosRes.data) setUsuarios(usuariosRes.data)
+    if (tiposCustomRes.data) setTiposCustom(tiposCustomRes.data)
   }
 
   async function handleCreateUser(e: React.FormEvent) {
     e.preventDefault()
 
     if (!ubicacion.area_id) {
-      alert('Por favor selecciona un área primero')
+      showToast('Por favor selecciona un área primero', 'warning')
       return
     }
 
@@ -129,10 +146,10 @@ export default function RegistroMultiplePage() {
       setUbicacion({ ...ubicacion, usuario_id: newUser.id })
       setNewUserDialogOpen(false)
       setNewUserData({ nombre: "" })
-      alert('Usuario creado exitosamente')
-    } catch (error) {
+      showToast('Usuario creado exitosamente', 'success')
+    } catch (error: any) {
       console.error('Error:', error)
-      alert('Error al crear el usuario')
+      showToast(error.message || 'Error al crear el usuario', 'error')
     }
   }
 
@@ -147,6 +164,8 @@ export default function RegistroMultiplePage() {
       almacenamiento: "",
       procesador: "",
       mac: "",
+      ip: "",
+      anydesk: "",
       pulgadas: "",
       estado: "activo",
       observaciones: "",
@@ -161,7 +180,7 @@ export default function RegistroMultiplePage() {
 
   function eliminarEquipo(id: string) {
     if (equipos.length === 1) {
-      alert("Debe haber al menos un equipo")
+      showToast("Debe haber al menos un equipo", 'warning')
       return
     }
     setEquipos(equipos.filter(e => e.id !== id))
@@ -192,6 +211,8 @@ export default function RegistroMultiplePage() {
           if (equipo.ram) specs.ram = equipo.ram
           if (equipo.almacenamiento) specs.almacenamiento = equipo.almacenamiento
           if (equipo.mac) specs.mac = equipo.mac
+          if (equipo.ip) specs.ip = equipo.ip
+          if (equipo.anydesk) specs.anydesk = equipo.anydesk
         } else if (equipo.tipo === 'monitor') {
           if (equipo.pulgadas) specs.pulgadas = equipo.pulgadas
         }
@@ -255,11 +276,11 @@ export default function RegistroMultiplePage() {
         }
       }
 
-      alert(`${equipos.length} equipo(s) registrado(s) exitosamente`)
+      showToast(`${equipos.length} equipo(s) registrado(s) exitosamente`, 'success')
       router.push('/dashboard')
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error:', error)
-      alert('Error al registrar equipos')
+      showToast(error.message || 'Error al registrar equipos', 'error')
     } finally {
       setLoading(false)
     }
@@ -348,10 +369,20 @@ export default function RegistroMultiplePage() {
                 </div>
 
                 {equipos.map((equipo, index) => (
-                  <Card key={equipo.id} className="border-2">
-                    <CardHeader className="bg-gray-50">
+                  <Card
+                    key={equipo.id}
+                    className={`border-4 transition-all ${
+                      activeEquipoId === equipo.id
+                        ? 'border-primary-500 shadow-lg ring-2 ring-primary-200'
+                        : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                    onClick={() => setActiveEquipoId(equipo.id)}
+                  >
+                    <CardHeader className={activeEquipoId === equipo.id ? 'bg-primary-50' : 'bg-gray-50'}>
                       <div className="flex justify-between items-center">
-                        <CardTitle className="text-base">Equipo #{index + 1}</CardTitle>
+                        <CardTitle className={`text-base ${activeEquipoId === equipo.id ? 'text-primary-700 font-bold' : ''}`}>
+                          Equipo #{index + 1} {activeEquipoId === equipo.id && '← Editando'}
+                        </CardTitle>
                         {equipos.length > 1 && (
                           <Button
                             type="button"
@@ -378,6 +409,11 @@ export default function RegistroMultiplePage() {
                             <option value="impresora">Impresora</option>
                             <option value="scanner">Scanner</option>
                             <option value="anexo">Anexo</option>
+                            {tiposCustom.map(tipo => (
+                              <option key={tipo.id} value={tipo.nombre.toLowerCase()}>
+                                {tipo.nombre}
+                              </option>
+                            ))}
                           </Select>
                         </div>
 
@@ -439,13 +475,31 @@ export default function RegistroMultiplePage() {
                               />
                             </div>
                           </div>
-                          <div>
-                            <Label>Dirección MAC</Label>
-                            <Input
-                              value={equipo.mac}
-                              onChange={(e) => actualizarEquipo(equipo.id, 'mac', e.target.value)}
-                              placeholder="00:1A:2B:3C:4D:5E"
-                            />
+                          <div className="grid md:grid-cols-3 gap-4">
+                            <div>
+                              <Label>Dirección MAC</Label>
+                              <Input
+                                value={equipo.mac}
+                                onChange={(e) => actualizarEquipo(equipo.id, 'mac', e.target.value)}
+                                placeholder="00:1A:2B:3C:4D:5E"
+                              />
+                            </div>
+                            <div>
+                              <Label>Dirección IP</Label>
+                              <Input
+                                value={equipo.ip}
+                                onChange={(e) => actualizarEquipo(equipo.id, 'ip', e.target.value)}
+                                placeholder="192.168.1.100"
+                              />
+                            </div>
+                            <div>
+                              <Label>AnyDesk</Label>
+                              <Input
+                                value={equipo.anydesk}
+                                onChange={(e) => actualizarEquipo(equipo.id, 'anydesk', e.target.value)}
+                                placeholder="123 456 789"
+                              />
+                            </div>
                           </div>
                         </div>
                       )}
