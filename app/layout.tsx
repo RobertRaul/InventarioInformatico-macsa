@@ -2,6 +2,8 @@ import type { Metadata } from "next"
 import { Inter } from "next/font/google"
 import "./globals.css"
 import { Navbar } from "@/components/navbar"
+import { ToastProvider } from "@/components/ui/toast"
+import { ConfirmProvider } from "@/components/ui/confirm-dialog"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -18,8 +20,12 @@ export default function RootLayout({
   return (
     <html lang="es">
       <body className={inter.className}>
-        <Navbar />
-        {children}
+        <ToastProvider>
+          <ConfirmProvider>
+            <Navbar />
+            {children}
+          </ConfirmProvider>
+        </ToastProvider>
       </body>
     </html>
   )

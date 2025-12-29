@@ -9,6 +9,8 @@ import { Select } from "@/components/ui/select"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { useToast } from "@/components/ui/toast"
+import { useConfirm } from "@/components/ui/confirm-dialog"
 
 type Tab = "pisos" | "areas" | "usuarios" | "tipos"
 
@@ -763,6 +765,8 @@ function UsuariosAdmin() {
 }
 
 function TiposEquiposAdmin() {
+  const { showToast } = useToast()
+  const { confirm } = useConfirm()
   const [tipos, setTipos] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -782,12 +786,20 @@ function TiposEquiposAdmin() {
 
   async function cargarTipos() {
     setLoading(true)
-    const { data } = await supabase
-      .from('tipos_equipos_custom')
-      .select('*')
-      .order('nombre')
-    if (data) setTipos(data)
-    setLoading(false)
+    try {
+      const { data, error } = await supabase
+        .from('tipos_equipos_custom')
+        .select('*')
+        .order('nombre')
+
+      if (error) throw error
+      if (data) setTipos(data)
+    } catch (error: any) {
+      console.error('Error al cargar tipos:', error)
+      showToast(error.message || 'Error al cargar tipos de equipos', 'error')
+    } finally {
+      setLoading(false)
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -798,29 +810,59 @@ function TiposEquiposAdmin() {
       campos_adicionales: campos
     }
 
-    if (editingTipo) {
-      await supabase
-        .from('tipos_equipos_custom')
-        .update(dataToSave)
-        .eq('id', editingTipo.id)
-    } else {
-      await supabase
-        .from('tipos_equipos_custom')
-        .insert(dataToSave)
-    }
+    try {
+      if (editingTipo) {
+        const { error } = await supabase
+          .from('tipos_equipos_custom')
+          .update(dataToSave)
+          .eq('id', editingTipo.id)
 
-    setDialogOpen(false)
-    setEditingTipo(null)
-    setFormData({ nombre: "", descripcion: "", activo: true })
-    setCampos([])
-    cargarTipos()
+        if (error) throw error
+        showToast('Tipo de equipo actualizado exitosamente', 'success')
+      } else {
+        const { error } = await supabase
+          .from('tipos_equipos_custom')
+          .insert(dataToSave)
+
+        if (error) throw error
+        showToast('Tipo de equipo creado exitosamente', 'success')
+      }
+
+      setDialogOpen(false)
+      setEditingTipo(null)
+      setFormData({ nombre: "", descripcion: "", activo: true })
+      setCampos([])
+      cargarTipos()
+    } catch (error: any) {
+      console.error('Error:', error)
+      showToast(error.message || 'Error al guardar el tipo de equipo', 'error')
+    }
   }
 
   async function handleDelete(id: string) {
-    if (!confirm('¿Estás seguro de eliminar este tipo de equipo?')) return
+    const confirmed = await confirm({
+      title: '¿Eliminar tipo de equipo?',
+      description: 'Esta acción no se puede deshacer. El tipo de equipo será eliminado permanentemente.',
+      confirmText: 'Eliminar',
+      cancelText: 'Cancelar',
+      variant: 'destructive'
+    })
 
-    await supabase.from('tipos_equipos_custom').delete().eq('id', id)
-    cargarTipos()
+    if (!confirmed) return
+
+    try {
+      const { error } = await supabase
+        .from('tipos_equipos_custom')
+        .delete()
+        .eq('id', id)
+
+      if (error) throw error
+      showToast('Tipo de equipo eliminado exitosamente', 'success')
+      cargarTipos()
+    } catch (error: any) {
+      console.error('Error:', error)
+      showToast(error.message || 'Error al eliminar el tipo de equipo', 'error')
+    }
   }
 
   function openDialog(tipo?: any) {
