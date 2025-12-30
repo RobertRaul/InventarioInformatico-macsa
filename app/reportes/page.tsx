@@ -13,6 +13,7 @@ export default function ReportesPage() {
   const [pisos, setPisos] = useState<any[]>([])
   const [areas, setAreas] = useState<any[]>([])
   const [usuarios, setUsuarios] = useState<any[]>([])
+  const [tiposCustom, setTiposCustom] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
   const [filtros, setFiltros] = useState({
@@ -39,29 +40,40 @@ export default function ReportesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filtros])
 
+  function getTipoNombre(equipo: any): string {
+    return equipo.tipo_custom?.nombre || equipo.tipo || '-'
+  }
+
   async function cargarDatos() {
     setLoading(true)
-    const [equiposRes, pisosRes, areasRes, usuariosRes] = await Promise.all([
+    const [equiposRes, pisosRes, areasRes, usuariosRes, tiposCustomRes] = await Promise.all([
       supabase.from('equipos').select(`
         *,
         usuario:usuarios (
+          id,
           nombre,
           area:areas (
+            id,
             nombre,
-            piso:pisos (nombre)
+            piso:pisos (id, nombre)
           )
+        ),
+        tipo_custom:tipos_equipos_custom (
+          nombre
         ),
         perifericos (tipo, cantidad, descripcion)
       `).order('created_at', { ascending: false }),
       supabase.from('pisos').select('*').order('orden', { ascending: false }),
       supabase.from('areas').select('*, piso:pisos(*)').order('nombre'),
-      supabase.from('usuarios').select('*, area:areas(*, piso:pisos(*))').eq('activo', true).order('nombre')
+      supabase.from('usuarios').select('*, area:areas(*, piso:pisos(*))').eq('activo', true).order('nombre'),
+      supabase.from('tipos_equipos_custom').select('*').eq('activo', true).order('nombre')
     ])
 
     if (equiposRes.data) setEquipos(equiposRes.data)
     if (pisosRes.data) setPisos(pisosRes.data)
     if (areasRes.data) setAreas(areasRes.data)
     if (usuariosRes.data) setUsuarios(usuariosRes.data)
+    if (tiposCustomRes.data) setTiposCustom(tiposCustomRes.data)
     setLoading(false)
   }
 
@@ -81,7 +93,7 @@ export default function ReportesPage() {
     }
 
     if (filtros.tipo) {
-      filtrados = filtrados.filter(e => e.tipo === filtros.tipo)
+      filtrados = filtrados.filter(e => getTipoNombre(e).toLowerCase() === filtros.tipo.toLowerCase())
     }
 
     if (filtros.estado) {
@@ -97,7 +109,8 @@ export default function ReportesPage() {
     const porPiso: Record<string, number> = {}
 
     equiposFiltrados.forEach(e => {
-      porTipo[e.tipo] = (porTipo[e.tipo] || 0) + 1
+      const tipoNombre = getTipoNombre(e)
+      porTipo[tipoNombre] = (porTipo[tipoNombre] || 0) + 1
       porEstado[e.estado] = (porEstado[e.estado] || 0) + 1
 
       const piso = e.usuario?.area?.piso?.nombre || 'Sin asignar'
@@ -134,7 +147,7 @@ export default function ReportesPage() {
     }
 
     if (filtros.tipo) {
-      filtrados = filtrados.filter(e => e.tipo === filtros.tipo)
+      filtrados = filtrados.filter(e => getTipoNombre(e).toLowerCase() === filtros.tipo.toLowerCase())
     }
 
     if (filtros.estado) {
@@ -255,6 +268,11 @@ export default function ReportesPage() {
                       <option value="impresora">Impresora</option>
                       <option value="scanner">Scanner</option>
                       <option value="anexo">Anexo</option>
+                      {tiposCustom.map(tipo => (
+                        <option key={tipo.id} value={tipo.nombre.toLowerCase()}>
+                          {tipo.nombre}
+                        </option>
+                      ))}
                     </Select>
                   </div>
 

@@ -11,6 +11,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useToast } from "@/components/ui/toast"
 import { useConfirm } from "@/components/ui/confirm-dialog"
 
+type TipoCustom = {
+  id: string
+  nombre: string
+  descripcion: string | null
+  campos_adicionales: any[]
+}
+
 export default function EditarEquipoPage({ params }: { params: { id: string } }) {
   const router = useRouter()
   const { showToast } = useToast()
@@ -20,6 +27,7 @@ export default function EditarEquipoPage({ params }: { params: { id: string } })
   const [pisos, setPisos] = useState<Piso[]>([])
   const [areas, setAreas] = useState<Area[]>([])
   const [usuarios, setUsuarios] = useState<Usuario[]>([])
+  const [tiposCustom, setTiposCustom] = useState<TipoCustom[]>([])
   const [filteredAreas, setFilteredAreas] = useState<Area[]>([])
   const [filteredUsuarios, setFilteredUsuarios] = useState<Usuario[]>([])
 
@@ -27,7 +35,7 @@ export default function EditarEquipoPage({ params }: { params: { id: string } })
     piso_id: "",
     area_id: "",
     usuario_id: "",
-    tipo: "computadora" as TipoEquipo,
+    tipo: "computadora",
     codigo_barra: "",
     marca: "",
     modelo: "",
@@ -69,30 +77,36 @@ export default function EditarEquipoPage({ params }: { params: { id: string } })
   async function cargarDatos() {
     setLoadingData(true)
 
-    const [equipoRes, pisosRes, areasRes, usuariosRes] = await Promise.all([
+    const [equipoRes, pisosRes, areasRes, usuariosRes, tiposCustomRes] = await Promise.all([
       supabase.from('equipos').select(`
         *,
         usuario:usuarios(*, area:areas(*, piso:pisos(*))),
+        tipo_custom:tipos_equipos_custom(*),
         perifericos(*)
       `).eq('id', params.id).single(),
       supabase.from('pisos').select('*').order('orden', { ascending: false }),
       supabase.from('areas').select('*').order('nombre'),
-      supabase.from('usuarios').select('*, area:areas(*)').eq('activo', true).order('nombre')
+      supabase.from('usuarios').select('*, area:areas(*)').eq('activo', true).order('nombre'),
+      supabase.from('tipos_equipos_custom').select('*').eq('activo', true).order('nombre')
     ])
 
     if (pisosRes.data) setPisos(pisosRes.data)
     if (areasRes.data) setAreas(areasRes.data)
     if (usuariosRes.data) setUsuarios(usuariosRes.data)
+    if (tiposCustomRes.data) setTiposCustom(tiposCustomRes.data)
 
     if (equipoRes.data) {
       const equipo = equipoRes.data
       const perifericos = equipo.perifericos || []
 
+      // Determinar el tipo (estándar o personalizado)
+      const tipoValue = equipo.tipo || equipo.tipo_custom?.nombre.toLowerCase() || "computadora"
+
       setFormData({
         piso_id: equipo.usuario?.area?.piso?.id || "",
         area_id: equipo.usuario?.area?.id || "",
         usuario_id: equipo.usuario_id || "",
-        tipo: equipo.tipo as TipoEquipo,
+        tipo: tipoValue,
         codigo_barra: equipo.codigo_barra || "",
         marca: equipo.marca || "",
         modelo: equipo.modelo || "",
@@ -135,18 +149,34 @@ export default function EditarEquipoPage({ params }: { params: { id: string } })
         if (formData.pulgadas) specs.pulgadas = formData.pulgadas
       }
 
+      // Verificar si es un tipo personalizado
+      const tiposEstandar = ['computadora', 'monitor', 'impresora', 'scanner', 'anexo']
+      const esTipoCustom = !tiposEstandar.includes(formData.tipo)
+      const tipoCustom = esTipoCustom ? tiposCustom.find(t => t.nombre.toLowerCase() === formData.tipo) : null
+
+      const equipoData: any = {
+        usuario_id: formData.usuario_id || null,
+        codigo_barra: formData.codigo_barra || null,
+        marca: formData.marca || null,
+        modelo: formData.modelo || null,
+        specs,
+        estado: formData.estado,
+        observaciones: formData.observaciones || null
+      }
+
+      if (esTipoCustom && tipoCustom) {
+        // Si es tipo personalizado, usar tipo_custom_id y poner NULL en tipo
+        equipoData.tipo = null
+        equipoData.tipo_custom_id = tipoCustom.id
+      } else {
+        // Si es tipo estándar, usar el campo tipo
+        equipoData.tipo = formData.tipo
+        equipoData.tipo_custom_id = null
+      }
+
       const { error: equipoError } = await supabase
         .from('equipos')
-        .update({
-          tipo: formData.tipo,
-          usuario_id: formData.usuario_id || null,
-          codigo_barra: formData.codigo_barra || null,
-          marca: formData.marca || null,
-          modelo: formData.modelo || null,
-          specs,
-          estado: formData.estado,
-          observaciones: formData.observaciones || null
-        })
+        .update(equipoData)
         .eq('id', params.id)
 
       if (equipoError) throw equipoError
@@ -307,13 +337,18 @@ export default function EditarEquipoPage({ params }: { params: { id: string } })
                     id="tipo"
                     required
                     value={formData.tipo}
-                    onChange={(e) => setFormData({ ...formData, tipo: e.target.value as TipoEquipo })}
+                    onChange={(e) => setFormData({ ...formData, tipo: e.target.value })}
                   >
                     <option value="computadora">Computadora</option>
                     <option value="monitor">Monitor</option>
                     <option value="impresora">Impresora</option>
                     <option value="scanner">Scanner</option>
                     <option value="anexo">Anexo</option>
+                    {tiposCustom.map(tipo => (
+                      <option key={tipo.id} value={tipo.nombre.toLowerCase()}>
+                        {tipo.nombre}
+                      </option>
+                    ))}
                   </Select>
                 </div>
 

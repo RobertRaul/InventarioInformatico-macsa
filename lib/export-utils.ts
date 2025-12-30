@@ -15,6 +15,10 @@ type EquipoExport = {
   estado: string
 }
 
+function getTipoNombre(equipo: any): string {
+  return equipo.tipo_custom?.nombre || equipo.tipo || '-'
+}
+
 export function exportToPDF(equipos: any[], filtros: string) {
   const doc = new jsPDF('landscape')
 
@@ -29,18 +33,21 @@ export function exportToPDF(equipos: any[], filtros: string) {
     doc.text(`Filtros aplicados: ${filtros}`, 14, 27)
   }
 
-  const tableData = equipos.map(equipo => [
-    equipo.usuario?.area?.piso?.nombre || '-',
-    equipo.usuario?.area?.nombre || '-',
-    equipo.usuario?.nombre || 'Sin asignar',
-    equipo.tipo.toUpperCase(),
-    equipo.marca || '-',
-    equipo.modelo || '-',
-    formatSpecs(equipo.specs, equipo.tipo),
-    equipo.codigo_barra || '-',
-    formatPerifericos(equipo.perifericos),
-    equipo.estado.toUpperCase()
-  ])
+  const tableData = equipos.map(equipo => {
+    const tipoNombre = getTipoNombre(equipo)
+    return [
+      equipo.usuario?.area?.piso?.nombre || '-',
+      equipo.usuario?.area?.nombre || '-',
+      equipo.usuario?.nombre || 'Sin asignar',
+      tipoNombre.toUpperCase(),
+      equipo.marca || '-',
+      equipo.modelo || '-',
+      formatSpecs(equipo.specs, equipo.tipo || tipoNombre),
+      equipo.codigo_barra || '-',
+      formatPerifericos(equipo.perifericos),
+      equipo.estado.toUpperCase()
+    ]
+  })
 
   autoTable(doc, {
     head: [['Piso', 'Área', 'Usuario', 'Tipo', 'Marca', 'Modelo', 'Especificaciones', 'Código', 'Periféricos', 'Estado']],
@@ -94,18 +101,21 @@ export function exportToPDF(equipos: any[], filtros: string) {
 }
 
 export function exportToExcel(equipos: any[], filtros: string) {
-  const data: EquipoExport[] = equipos.map(equipo => ({
-    piso: equipo.usuario?.area?.piso?.nombre || '-',
-    area: equipo.usuario?.area?.nombre || '-',
-    usuario: equipo.usuario?.nombre || 'Sin asignar',
-    tipo: equipo.tipo.toUpperCase(),
-    marca: equipo.marca || '-',
-    modelo: equipo.modelo || '-',
-    specs: formatSpecs(equipo.specs, equipo.tipo),
-    codigo_barra: equipo.codigo_barra || '-',
-    perifericos: formatPerifericos(equipo.perifericos),
-    estado: equipo.estado.toUpperCase()
-  }))
+  const data: EquipoExport[] = equipos.map(equipo => {
+    const tipoNombre = getTipoNombre(equipo)
+    return {
+      piso: equipo.usuario?.area?.piso?.nombre || '-',
+      area: equipo.usuario?.area?.nombre || '-',
+      usuario: equipo.usuario?.nombre || 'Sin asignar',
+      tipo: tipoNombre.toUpperCase(),
+      marca: equipo.marca || '-',
+      modelo: equipo.modelo || '-',
+      specs: formatSpecs(equipo.specs, equipo.tipo || tipoNombre),
+      codigo_barra: equipo.codigo_barra || '-',
+      perifericos: formatPerifericos(equipo.perifericos),
+      estado: equipo.estado.toUpperCase()
+    }
+  })
 
   const ws = XLSX.utils.json_to_sheet(data, {
     header: ['piso', 'area', 'usuario', 'tipo', 'marca', 'modelo', 'specs', 'codigo_barra', 'perifericos', 'estado']
