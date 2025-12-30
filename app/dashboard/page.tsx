@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
+import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { exportToPDF, exportToExcel } from "@/lib/export-utils"
 import { useToast } from "@/components/ui/toast"
@@ -50,6 +51,7 @@ export default function DashboardPage() {
   const [filterTipo, setFilterTipo] = useState("")
   const [filterEstado, setFilterEstado] = useState("")
   const [filterPiso, setFilterPiso] = useState("")
+  const [filterArea, setFilterArea] = useState("")
   const [filterUsuario, setFilterUsuario] = useState("")
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage, setItemsPerPage] = useState(20)
@@ -129,9 +131,10 @@ export default function DashboardPage() {
     const matchTipo = !filterTipo || getTipoNombre(equipo).toLowerCase() === filterTipo.toLowerCase()
     const matchEstado = !filterEstado || equipo.estado === filterEstado
     const matchPiso = !filterPiso || equipo.usuario?.area?.piso?.nombre === filterPiso
+    const matchArea = !filterArea || equipo.usuario?.area?.nombre === filterArea
     const matchUsuario = !filterUsuario || equipo.usuario?.nombre === filterUsuario
 
-    return matchSearch && matchTipo && matchEstado && matchPiso && matchUsuario
+    return matchSearch && matchTipo && matchEstado && matchPiso && matchArea && matchUsuario
   })
 
   const equiposOrdenados = [...equiposFiltrados].sort((a, b) => {
@@ -179,8 +182,28 @@ export default function DashboardPage() {
   const equiposPaginados = equiposOrdenados.slice(startIndex, endIndex)
 
   const pisosUnicos = Array.from(new Set(equipos.map(e => e.usuario?.area?.piso?.nombre).filter(Boolean))) as string[]
-  const usuariosUnicos = Array.from(new Set(equipos.map(e => e.usuario?.nombre).filter(Boolean))) as string[]
   const tiposUnicos = Array.from(new Set(equipos.map(e => getTipoNombre(e)).filter(Boolean))) as string[]
+
+  // Filtrar áreas según el piso seleccionado
+  const areasDisponibles = filterPiso
+    ? Array.from(new Set(equipos
+        .filter(e => e.usuario?.area?.piso?.nombre === filterPiso)
+        .map(e => e.usuario?.area?.nombre)
+        .filter(Boolean))) as string[]
+    : Array.from(new Set(equipos.map(e => e.usuario?.area?.nombre).filter(Boolean))) as string[]
+
+  // Filtrar usuarios según área seleccionada (o piso si no hay área)
+  const usuariosDisponibles = filterArea
+    ? Array.from(new Set(equipos
+        .filter(e => e.usuario?.area?.nombre === filterArea)
+        .map(e => e.usuario?.nombre)
+        .filter(Boolean))) as string[]
+    : filterPiso
+    ? Array.from(new Set(equipos
+        .filter(e => e.usuario?.area?.piso?.nombre === filterPiso)
+        .map(e => e.usuario?.nombre)
+        .filter(Boolean))) as string[]
+    : Array.from(new Set(equipos.map(e => e.usuario?.nombre).filter(Boolean))) as string[]
 
   function handleSort(field: string) {
     if (sortField === field) {
@@ -263,6 +286,7 @@ export default function DashboardPage() {
                       filterTipo && `Tipo: ${filterTipo}`,
                       filterEstado && `Estado: ${filterEstado}`,
                       filterPiso && `Piso: ${filterPiso}`,
+                      filterArea && `Área: ${filterArea}`,
                       filterUsuario && `Usuario: ${filterUsuario}`
                     ].filter(Boolean).join(', ')
 
@@ -278,6 +302,7 @@ export default function DashboardPage() {
                       filterTipo && `Tipo: ${filterTipo}`,
                       filterEstado && `Estado: ${filterEstado}`,
                       filterPiso && `Piso: ${filterPiso}`,
+                      filterArea && `Área: ${filterArea}`,
                       filterUsuario && `Usuario: ${filterUsuario}`
                     ].filter(Boolean).join(', ')
 
@@ -302,7 +327,7 @@ export default function DashboardPage() {
             <CardTitle className="text-lg">Filtros</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid md:grid-cols-5 gap-4">
+            <div className="grid md:grid-cols-3 gap-4 mb-4">
               <div>
                 <Input
                   placeholder="Buscar por código, marca, modelo..."
@@ -311,12 +336,18 @@ export default function DashboardPage() {
                 />
               </div>
               <div>
-                <Select value={filterTipo} onChange={(e) => setFilterTipo(e.target.value)}>
-                  <option value="">Todos los tipos</option>
-                  {tiposUnicos.sort().map(tipo => (
-                    <option key={tipo} value={tipo}>{tipo.charAt(0).toUpperCase() + tipo.slice(1)}</option>
-                  ))}
-                </Select>
+                <SearchableSelect
+                  value={filterTipo}
+                  onChange={(value) => setFilterTipo(value)}
+                  options={[
+                    { value: "", label: "Todos los tipos" },
+                    ...tiposUnicos.sort().map(tipo => ({
+                      value: tipo,
+                      label: tipo.charAt(0).toUpperCase() + tipo.slice(1)
+                    }))
+                  ]}
+                  placeholder="Seleccionar tipo..."
+                />
               </div>
               <div>
                 <Select value={filterEstado} onChange={(e) => setFilterEstado(e.target.value)}>
@@ -327,21 +358,49 @@ export default function DashboardPage() {
                   <option value="baja">Baja</option>
                 </Select>
               </div>
+            </div>
+            <div className="grid md:grid-cols-3 gap-4">
               <div>
-                <Select value={filterPiso} onChange={(e) => setFilterPiso(e.target.value)}>
-                  <option value="">Todos los pisos</option>
-                  {pisosUnicos.map(piso => (
-                    <option key={piso} value={piso}>{piso}</option>
-                  ))}
-                </Select>
+                <SearchableSelect
+                  value={filterPiso}
+                  onChange={(value) => {
+                    setFilterPiso(value)
+                    setFilterArea("")
+                    setFilterUsuario("")
+                  }}
+                  options={[
+                    { value: "", label: "Todos los pisos" },
+                    ...pisosUnicos.map(piso => ({ value: piso, label: piso }))
+                  ]}
+                  placeholder="Seleccionar piso..."
+                />
               </div>
               <div>
-                <Select value={filterUsuario} onChange={(e) => setFilterUsuario(e.target.value)}>
-                  <option value="">Todos los usuarios</option>
-                  {usuariosUnicos.map(usuario => (
-                    <option key={usuario} value={usuario}>{usuario}</option>
-                  ))}
-                </Select>
+                <SearchableSelect
+                  value={filterArea}
+                  onChange={(value) => {
+                    setFilterArea(value)
+                    setFilterUsuario("")
+                  }}
+                  options={[
+                    { value: "", label: "Todas las áreas" },
+                    ...areasDisponibles.map(area => ({ value: area, label: area }))
+                  ]}
+                  placeholder="Seleccionar área..."
+                  disabled={!filterPiso}
+                />
+              </div>
+              <div>
+                <SearchableSelect
+                  value={filterUsuario}
+                  onChange={(value) => setFilterUsuario(value)}
+                  options={[
+                    { value: "", label: "Todos los usuarios" },
+                    ...usuariosDisponibles.map(usuario => ({ value: usuario, label: usuario }))
+                  ]}
+                  placeholder="Seleccionar usuario..."
+                  disabled={!filterPiso && !filterArea}
+                />
               </div>
             </div>
             <div className="mt-3 flex justify-between items-center">
@@ -359,7 +418,7 @@ export default function DashboardPage() {
                   <option value="50">50 por página</option>
                   <option value="100">100 por página</option>
                 </Select>
-                {(searchTerm || filterTipo || filterEstado || filterPiso || filterUsuario) && (
+                {(searchTerm || filterTipo || filterEstado || filterPiso || filterArea || filterUsuario) && (
                   <Button
                     variant="ghost"
                     size="sm"
@@ -368,6 +427,7 @@ export default function DashboardPage() {
                       setFilterTipo("")
                       setFilterEstado("")
                       setFilterPiso("")
+                      setFilterArea("")
                       setFilterUsuario("")
                     }}
                   >
